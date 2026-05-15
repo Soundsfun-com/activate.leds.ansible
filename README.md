@@ -6,6 +6,16 @@ Every site Pi and portable flasher runs `ansible-pull` hourly against this repo,
 
 > Architecture: see [`PLAN.md` §7.3.4](https://github.com/Soundsfun-com/activate.leds.dashboard/blob/main/PLAN.md) in the dashboard repo for the full Ansible fleet-sync ADR.
 
+## Why this repo is public
+
+This repo contains **only configuration patterns and conventions** — no credentials, no internal IPs, no topology that grants access to anything. The security boundary for the fleet is enforced elsewhere (Cloudflare Access, outbound-only tunnels, per-Pi bearer tokens). Making the repo public means:
+
+- Pis clone over plain HTTPS with no auth — no shared deploy key to leak or rotate
+- The convention is auditable in the open ("no secrets in git" is enforced by GitHub's push protection)
+- Anyone in the org can review fleet-config changes without repo invitations
+
+See [`SECURITY.md`](./SECURITY.md) for the full "what's not in this repo" list and where secrets actually live.
+
 ## What lives here
 
 ```
