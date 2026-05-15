@@ -1,0 +1,7 @@
+---
+- name: rebuild-hosts-file
+  ansible.builtin.lineinfile:
+    path: /etc/hosts
+    regexp: '^127\.0\.1\.1\s'
+    line: "127.0.1.1\t{{ inventory_hostname }}"
+    state: present

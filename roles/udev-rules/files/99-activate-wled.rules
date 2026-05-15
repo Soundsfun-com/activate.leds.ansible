@@ -1,0 +1,21 @@
+# Activate WLED — USB serial access for the agent user
+# Mirror of the rules baked into the pi-gen image at stage3-activate/04-udev-rules/.
+# This role re-installs them so drift is repaired on every ansible-pull.
+
+# Silicon Labs CP210x
+SUBSYSTEM=="tty", ATTRS{idVendor}=="10c4", ATTRS{idProduct}=="ea60", GROUP="dialout", MODE="0660"
+SUBSYSTEM=="tty", ATTRS{idVendor}=="10c4", ATTRS{idProduct}=="ea70", GROUP="dialout", MODE="0660"
+
+# WCH CH340/CH341
+SUBSYSTEM=="tty", ATTRS{idVendor}=="1a86", ATTRS{idProduct}=="7523", GROUP="dialout", MODE="0660"
+SUBSYSTEM=="tty", ATTRS{idVendor}=="1a86", ATTRS{idProduct}=="55d4", GROUP="dialout", MODE="0660"
+
+# FTDI FT232R / FT2232 / FT4232
+SUBSYSTEM=="tty", ATTRS{idVendor}=="0403", GROUP="dialout", MODE="0660"
+
+# Espressif USB JTAG (ESP32-S3, ESP32-C3 native USB)
+SUBSYSTEM=="tty", ATTRS{idVendor}=="303a", GROUP="dialout", MODE="0660"
+
+# Trigger udev event on plug-in for the auto-flash service (portable flashers only).
+ACTION=="add", SUBSYSTEM=="tty", ATTRS{idVendor}=="10c4|1a86|0403|303a", \
+    RUN+="/bin/sh -c 'mkdir -p /run/activate-wled && echo $kernel >> /run/activate-wled/usb-events'"

@@ -1,0 +1,10 @@
+---
+# Ansible Galaxy dependencies.
+# Installed by ansible-pull automatically when this file exists at the repo root,
+# or manually via: ansible-galaxy collection install -r requirements.yml
+
+collections:
+  - name: community.general
+    version: ">=9.0.0"   # for the timezone module
+  - name: ansible.posix
+    version: ">=1.5.0"   # for sysctl, mount, etc. (future roles)

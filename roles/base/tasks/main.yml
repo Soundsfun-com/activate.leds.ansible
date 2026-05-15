@@ -1,0 +1,75 @@
+---
+# base role — OS-level baseline that every Pi (site or flasher) should converge to.
+# Idempotent: re-runs are no-ops if state already matches.
+
+- name: Set hostname to match inventory entry
+  ansible.builtin.hostname:
+    name: "{{ inventory_hostname }}"
+    use: systemd
+  notify: rebuild-hosts-file
+
+- name: Ensure /etc/hosts has 127.0.1.1 entry for the hostname
+  ansible.builtin.lineinfile:
+    path: /etc/hosts
+    regexp: '^127\.0\.1\.1\s'
+    line: "127.0.1.1\t{{ inventory_hostname }}"
+    state: present
+
+- name: Set system timezone
+  community.general.timezone:
+    name: "{{ site_timezone }}"
+
+- name: Ensure /var/log/activate-wled/ exists with correct ownership
+  ansible.builtin.file:
+    path: /var/log/activate-wled
+    state: directory
+    owner: activate-wled
+    group: activate-wled
+    mode: "0755"
+
+- name: Ensure /var/lib/activate-wled/ exists (state files, marker JSON)
+  ansible.builtin.file:
+    path: /var/lib/activate-wled
+    state: directory
+    owner: activate-wled
+    group: activate-wled
+    mode: "0755"
+
+- name: Install logrotate policy for /var/log/activate-wled/
+  ansible.builtin.copy:
+    dest: /etc/logrotate.d/activate-wled
+    owner: root
+    group: root
+    mode: "0644"
+    content: |
+      /var/log/activate-wled/*.log {
+          daily
+          rotate {{ activate_log_rotate_days }}
+          size {{ activate_log_max_size_mb }}M
+          missingok
+          notifempty
+          compress
+          delaycompress
+          copytruncate
+          su activate-wled activate-wled
+      }
+
+- name: Render MOTD with build + ansible-pull info
+  ansible.builtin.copy:
+    dest: /etc/motd
+    owner: root
+    group: root
+    mode: "0644"
+    content: |
+
+      ┌──────────────────────────────────────────────────────────────┐
+      │  Activate WLED Pi                                            │
+      │  Host:           {{ inventory_hostname }}
+      │  Site slug:      {{ site_slug | default('(unenrolled)') }}
+      │  Agent mode:     {{ agent_mode | default('site') }}
+      │  Timezone:       {{ site_timezone }}
+      │  Last ansible:   {{ ansible_date_time.iso8601 }}
+      │  Convergence by: ansible-pull (hourly, public ansible repo)
+      └──────────────────────────────────────────────────────────────┘
+      Don't edit files in /opt/activate-wled-agent/ or /etc/cloudflared/
+      directly — Ansible will overwrite them on the next pull.

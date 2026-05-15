@@ -1,0 +1,14 @@
+---
+# Default values for the base role.
+# Override in group_vars/all.yml or host_vars/<slug>.yml.
+
+# Per-site timezone. Default is Eastern (most Activate stores).
+# Override per-site in host_vars/<slug>.yml when a store is in another zone.
+site_timezone: America/New_York
+
+# Hostname pattern: each host's inventory_hostname IS the hostname.
+# (We set hostname = inventory_hostname unconditionally in tasks.)
+
+# Logrotate policy for /var/log/activate-wled/
+activate_log_rotate_days: 14
+activate_log_max_size_mb: 50

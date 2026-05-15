@@ -1,0 +1,19 @@
+---
+# udev-rules role — converge the USB serial access rules.
+# These are also baked into the pi-gen image (stage3-activate/04-udev-rules/),
+# but we re-install them via Ansible so drift is repaired on every pull.
+
+- name: Install udev rules for activate-wled USB devices
+  ansible.builtin.copy:
+    src: 99-activate-wled.rules
+    dest: /etc/udev/rules.d/99-activate-wled.rules
+    owner: root
+    group: root
+    mode: "0644"
+  notify: reload-udev
+
+- name: Ensure activate-wled user is in the dialout group
+  ansible.builtin.user:
+    name: activate-wled
+    groups: dialout
+    append: yes

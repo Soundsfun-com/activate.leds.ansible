@@ -1,0 +1,15 @@
+---
+# Security baseline defaults. Override in group_vars/all.yml.
+
+# Whether unattended-upgrades automatically applies security patches.
+# Defaults to false until we've validated the policy on canary Pis.
+auto_apply_security_patches: false
+
+# Whether to install + enable fail2ban (SSH brute-force protection).
+# Pis are LAN-only so this is belt-and-suspenders; enabled by default.
+fail2ban_enabled: true
+
+# Allowed SSH users (additional to root, which is locked out anyway).
+# Field techs SSH in as activate-wled.
+ssh_allowed_users:
+  - activate-wled

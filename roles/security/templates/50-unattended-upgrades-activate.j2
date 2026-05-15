@@ -1,0 +1,31 @@
+// Activate WLED — unattended-upgrades policy.
+// Rendered by Ansible. Lives in /etc/apt/apt.conf.d/.
+
+Unattended-Upgrade::Allowed-Origins {
+        "${distro_id}:${distro_codename}-security";
+        "${distro_id}ESMApps:${distro_codename}-apps-security";
+        "${distro_id}ESM:${distro_codename}-infra-security";
+};
+
+// Auto-fix interrupted dpkg runs (safe — only re-runs the existing operation).
+Unattended-Upgrade::AutoFixInterruptedDpkg "true";
+
+// Reboot automatically only inside the maintenance window AND only if security
+// patches required a reboot (e.g. kernel update).
+{% if auto_apply_security_patches %}
+Unattended-Upgrade::Automatic-Reboot "true";
+Unattended-Upgrade::Automatic-Reboot-WithUsers "false";
+Unattended-Upgrade::Automatic-Reboot-Time "{{ "%02d:00" | format(maintenance_window_start_hour | default(3)) }}";
+{% else %}
+// auto_apply_security_patches is false — patches are downloaded but NOT applied.
+// Run `unattended-upgrade -v` manually to apply, or flip the var via Ansible.
+Unattended-Upgrade::Automatic-Reboot "false";
+{% endif %}
+
+// Email on errors — we log to journal instead since the Pi has no MTA.
+Unattended-Upgrade::Mail "";
+Unattended-Upgrade::MailReport "on-change";
+
+// Don't keep old kernels forever.
+Unattended-Upgrade::Remove-Unused-Dependencies "true";
+Unattended-Upgrade::Remove-Unused-Kernel-Packages "true";
