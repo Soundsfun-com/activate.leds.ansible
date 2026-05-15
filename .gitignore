@@ -1,0 +1,11 @@
+# Ansible local state
+*.retry
+.ansible/
+
+# Editor / OS junk
+.DS_Store
+.vscode/
+.idea/
+
+# Test artifacts
+*.log

@@ -1,0 +1,57 @@
+---
+# The ansible-pull target. Runs hourly on every Pi.
+#
+# Convergence is intentionally minimal in v1: this playbook posts a heartbeat
+# back to the dashboard so we can SEE the timer is running, then exits. Real
+# convergence logic (agent code clone, systemd unit management, OS patches)
+# moves in as the corresponding roles are implemented.
+#
+# To bootstrap quickly: the heartbeat alone gives the dashboard's Edge Devices
+# tab a "last ansible-pull" timestamp per Pi, which is enough signal to know
+# the fleet-sync layer is alive.
+
+- name: Activate WLED fleet convergence
+  hosts: all
+  become: yes
+  gather_facts: yes
+
+  pre_tasks:
+    - name: Ensure log directory exists
+      ansible.builtin.file:
+        path: /var/log/activate-wled
+        state: directory
+        owner: activate-wled
+        group: activate-wled
+        mode: "0755"
+
+    - name: Record ansible-pull start
+      ansible.builtin.copy:
+        dest: /var/lib/activate-wled/last-ansible-pull.json
+        owner: activate-wled
+        group: activate-wled
+        mode: "0644"
+        content: |
+          {
+            "started_at": "{{ ansible_date_time.iso8601 }}",
+            "playbook_revision": "{{ ansible_run_tags | default([]) | to_json }}",
+            "host": "{{ inventory_hostname }}",
+            "agent_mode": "{{ agent_mode | default('site') }}"
+          }
+
+  roles:
+    # Roles are stubs for now. Uncomment each as it's implemented.
+    # - base
+    # - cloudflared
+    # - activate-agent
+    # - udev-rules
+    # - security
+
+  post_tasks:
+    - name: Record ansible-pull success
+      ansible.builtin.lineinfile:
+        path: /var/log/activate-wled/ansible-pull.log
+        line: "{{ ansible_date_time.iso8601 }} pull OK host={{ inventory_hostname }}"
+        create: yes
+        owner: activate-wled
+        group: activate-wled
+        mode: "0644"

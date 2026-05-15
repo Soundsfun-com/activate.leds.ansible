@@ -1,0 +1,32 @@
+# Inventory of every Pi in the Activate WLED fleet.
+#
+# Each Pi reads this file at `ansible-pull` time but only converges its OWN entry
+# (matched by `ansible_facts.hostname`). The same inventory file therefore drives
+# the whole fleet from a single source of truth.
+#
+# Hosts populate organically — when the dashboard's /sites/new flow provisions a
+# new location, a cloud worker appends a host entry here via the GitHub API and
+# commits. Until then this file is mostly empty.
+
+all:
+  children:
+    site_agents:
+      vars:
+        agent_mode: site
+      hosts:
+        # Populated by the dashboard's Add Location flow.
+        # Example shape:
+        #   activate-alpharetta:
+        #     site_slug: alpharetta
+        #     timezone: America/New_York
+
+    portable_flashers:
+      vars:
+        agent_mode: portable
+      hosts:
+        # Populated when a flasher is registered in /firmware/recovery/flashers.
+
+    canary:
+      # Pis in this group pick up changes from group_vars/canary.yml BEFORE
+      # the change is promoted to group_vars/all.yml. Used for staged rollouts.
+      hosts: {}

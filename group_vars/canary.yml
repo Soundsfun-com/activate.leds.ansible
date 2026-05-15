@@ -1,0 +1,9 @@
+# Overrides applied to hosts in the `canary` inventory group ONLY.
+#
+# Staged rollout workflow:
+#   1. Update a var here (e.g. activate_agent_ref: v1.5.0)
+#   2. Push. Canary Pis converge within ~1h.
+#   3. Soak for 24h, watch dashboard for regressions.
+#   4. If healthy: copy the var from canary.yml into all.yml, then commit
+#      (empties canary.yml of that var). Whole fleet converges within ~1h.
+#   5. If broken: git revert. Canary returns to all.yml's value within ~1h.

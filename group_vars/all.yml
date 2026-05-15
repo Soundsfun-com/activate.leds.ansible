@@ -1,0 +1,25 @@
+# Fleet-wide defaults. Every Pi reads these unless overridden by group_vars/canary.yml
+# or host_vars/<slug>.yml.
+#
+# Bulk updates from the dashboard's /firmware → Edge Devices tab edit these vars,
+# commit, and push. The fleet converges within ~1h.
+
+# --- Component version pins --------------------------------------------------
+
+# Agent code: which ref of activate.leds.dashboard to deploy.
+# "main" = always latest; pin to a tag/sha for stability.
+activate_agent_ref: main
+
+# Cloudflared: pinned to match the version baked into the pi-gen image.
+# Roll forward via this var; Ansible will install the new .deb on next pull.
+cloudflared_version: "2024.12.2"
+
+# --- Behavior ----------------------------------------------------------------
+
+# Whether to apply OS security patches automatically. Off by default until
+# we've validated the unattended-upgrades policy on the canary group.
+auto_apply_security_patches: false
+
+# Off-hours window (local time at each site) when reboots are allowed.
+maintenance_window_start_hour: 3   # 3 AM
+maintenance_window_end_hour: 5     # 5 AM
