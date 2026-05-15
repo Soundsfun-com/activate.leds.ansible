@@ -6,8 +6,10 @@
 
 # --- Component version pins --------------------------------------------------
 
-# Agent code: which ref of activate.leds.dashboard to deploy.
+# Agent code: which ref of Soundsfun-com/activate.leds.agent to deploy.
 # "main" = always latest; pin to a tag/sha for stability.
+# The activate-agent role clones the repo via SSH using the deploy key
+# baked into the pi-gen image at /etc/ansible/agent-deploy-key.
 activate_agent_ref: main
 
 # Cloudflared: pinned to match the version baked into the pi-gen image.

@@ -1,0 +1,23 @@
+---
+# Defaults for the activate-agent role.
+# Override in group_vars/all.yml or host_vars/<slug>.yml.
+
+# Where the agent code gets cloned and the systemd unit runs from.
+activate_agent_dir: /opt/activate-wled-agent
+activate_agent_checkout: "{{ activate_agent_dir }}/agent"
+activate_agent_venv: "{{ activate_agent_dir }}/venv"
+
+# Source repo + ref. The git ref bumps drive fleet-wide agent updates.
+# Override activate_agent_ref in group_vars/all.yml to bump.
+activate_agent_repo: git@github.com:Soundsfun-com/activate.leds.agent.git
+activate_agent_ref: main
+
+# SSH key for cloning the private agent repo. Baked into the Pi image at
+# build time (from secrets.AGENT_DEPLOY_KEY in CI, or from
+# infra/pi-image/secrets/agent-deploy-key locally).
+activate_agent_ssh_key: /etc/ansible/agent-deploy-key
+
+# Whether to ensure the systemd unit is started+enabled after convergence.
+# Set false for hosts that should clone code but not auto-start the service
+# (e.g. portable flashers in recovery-only mode).
+activate_agent_service_enabled: true

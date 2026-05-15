@@ -46,8 +46,8 @@
     - role: base
     - role: udev-rules
     - role: security
+    - role: activate-agent
     # - role: cloudflared     # TODO: tunnel version pinning
-    # - role: activate-agent  # TODO: blocked on agent-code-repo decision
 
   post_tasks:
     - name: Record ansible-pull success

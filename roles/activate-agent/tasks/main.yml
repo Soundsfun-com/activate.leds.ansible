@@ -1,0 +1,80 @@
+---
+# activate-agent role — clones Soundsfun-com/activate.leds.agent at the pinned
+# ref, installs Python deps into the pre-baked venv, writes the systemd unit,
+# restarts on change.
+#
+# Auth: SSH via the read-only deploy key at /etc/ansible/agent-deploy-key
+# (baked into the pi-gen image; injected from secrets.AGENT_DEPLOY_KEY in CI).
+
+- name: Ensure agent dir exists
+  ansible.builtin.file:
+    path: "{{ activate_agent_dir }}"
+    state: directory
+    owner: activate-wled
+    group: activate-wled
+    mode: "0755"
+
+- name: Verify deploy key is present on disk
+  ansible.builtin.stat:
+    path: "{{ activate_agent_ssh_key }}"
+  register: deploy_key_stat
+  failed_when: not deploy_key_stat.stat.exists
+
+- name: Clone or update agent code at the pinned ref
+  ansible.builtin.git:
+    repo: "{{ activate_agent_repo }}"
+    dest: "{{ activate_agent_checkout }}"
+    version: "{{ activate_agent_ref }}"
+    force: yes
+    accept_hostkey: yes
+    key_file: "{{ activate_agent_ssh_key }}"
+  become_user: activate-wled
+  environment:
+    # The git module's accept_hostkey + key_file flags handle the SSH setup,
+    # but be explicit so a future-version git module change doesn't surprise us.
+    GIT_SSH_COMMAND: "ssh -i {{ activate_agent_ssh_key }} -o IdentitiesOnly=yes -o UserKnownHostsFile=/root/.ssh/known_hosts -o StrictHostKeyChecking=yes"
+  register: agent_checkout
+  notify: restart-activate-wled-agent
+
+- name: Install/update Python deps when requirements.txt changed
+  ansible.builtin.pip:
+    requirements: "{{ activate_agent_checkout }}/requirements.txt"
+    virtualenv: "{{ activate_agent_venv }}"
+    virtualenv_command: /usr/bin/python3 -m venv
+  become_user: activate-wled
+  when: agent_checkout.changed
+  notify: restart-activate-wled-agent
+
+- name: Install activate-wled-agent.service systemd unit
+  ansible.builtin.copy:
+    src: "{{ activate_agent_checkout }}/systemd/activate-wled-agent.service"
+    dest: /etc/systemd/system/activate-wled-agent.service
+    remote_src: yes
+    owner: root
+    group: root
+    mode: "0644"
+  notify:
+    - daemon-reload
+    - restart-activate-wled-agent
+
+- name: Ensure agent service is enabled and running
+  ansible.builtin.systemd:
+    name: activate-wled-agent
+    enabled: yes
+    state: started
+    daemon_reload: yes
+  when: activate_agent_service_enabled
+
+- name: Record agent checkout state for telemetry
+  ansible.builtin.copy:
+    dest: /var/lib/activate-wled/agent-checkout.json
+    owner: activate-wled
+    group: activate-wled
+    mode: "0644"
+    content: |
+      {
+        "repo": "{{ activate_agent_repo }}",
+        "ref": "{{ activate_agent_ref }}",
+        "checked_out_at": "{{ ansible_date_time.iso8601 }}",
+        "host": "{{ inventory_hostname }}"
+      }
