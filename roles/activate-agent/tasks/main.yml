@@ -21,29 +21,58 @@
   failed_when: not deploy_key_stat.stat.exists
 
 - name: Clone or update agent code at the pinned ref
+  # Runs as root, NOT as activate-wled — because:
+  #   1. The deploy key at /etc/ansible/agent-deploy-key is root-only (0600).
+  #   2. /root/.ssh/known_hosts (where the SSH host keys live) sits inside
+  #      /root which is mode 0750 — only root can traverse it.
+  # A subsequent chown task hands ownership of the checkout to activate-wled
+  # so the systemd unit (which DOES run as activate-wled) can read the code.
   ansible.builtin.git:
     repo: "{{ activate_agent_repo }}"
     dest: "{{ activate_agent_checkout }}"
     version: "{{ activate_agent_ref }}"
     force: yes
-    accept_hostkey: yes
     key_file: "{{ activate_agent_ssh_key }}"
-  become_user: activate-wled
   environment:
-    # The git module's accept_hostkey + key_file flags handle the SSH setup,
-    # but be explicit so a future-version git module change doesn't surprise us.
     GIT_SSH_COMMAND: "ssh -i {{ activate_agent_ssh_key }} -o IdentitiesOnly=yes -o UserKnownHostsFile=/root/.ssh/known_hosts -o StrictHostKeyChecking=yes"
   register: agent_checkout
   notify: restart-activate-wled-agent
 
+- name: Hand ownership of the checkout to activate-wled
+  # The clone happened as root; the systemd unit runs the agent as
+  # activate-wled. The user needs read on every file + execute (search)
+  # on every directory under the checkout. Default file modes (0644 / 0755)
+  # are world-readable, so this chown is belt-and-suspenders — keeps the
+  # checkout consistent with what was always-intended.
+  ansible.builtin.file:
+    path: "{{ activate_agent_checkout }}"
+    state: directory
+    owner: activate-wled
+    group: activate-wled
+    recurse: yes
+
 - name: Install/update Python deps when requirements.txt changed
+  # Also runs as root (same reason — needs to write into the venv which
+  # may be root-created on first run). Venv files end up root-owned but
+  # mode 0644 / 0755, readable by activate-wled at runtime.
   ansible.builtin.pip:
     requirements: "{{ activate_agent_checkout }}/requirements.txt"
     virtualenv: "{{ activate_agent_venv }}"
     virtualenv_command: /usr/bin/python3 -m venv
-  become_user: activate-wled
   when: agent_checkout.changed
   notify: restart-activate-wled-agent
+
+- name: Hand ownership of the venv to activate-wled
+  # Same logic as the checkout chown — the agent runs as activate-wled and
+  # benefits from owning its virtualenv (means `pip install` from inside
+  # the venv at runtime would work without sudo, useful for debug).
+  ansible.builtin.file:
+    path: "{{ activate_agent_venv }}"
+    state: directory
+    owner: activate-wled
+    group: activate-wled
+    recurse: yes
+  when: agent_checkout.changed
 
 - name: Install activate-wled-agent.service systemd unit
   ansible.builtin.copy:
