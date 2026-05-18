@@ -7,7 +7,13 @@
 #   - activate-agent role (clone + install agent code, manage systemd unit)
 
 - name: Activate WLED fleet convergence
-  hosts: all
+  # Targets `localhost` because each Pi runs `ansible-pull` against itself —
+  # the inventory is for variable-scoping (host_vars / group_vars), not for
+  # picking which host the play runs against. `localhost` is always in
+  # ansible-pull's default --limit list, so this matches regardless of the
+  # Pi's actual system hostname or whether it has an inventory entry yet.
+  hosts: localhost
+  connection: local
   become: yes
   gather_facts: yes
 
@@ -34,10 +40,12 @@
         owner: activate-wled
         group: activate-wled
         mode: "0644"
+        # ansible_hostname = the system's actual hostname (gathered by
+        # gather_facts), not the inventory entry name. Reflects reality.
         content: |
           {
             "started_at": "{{ ansible_date_time.iso8601 }}",
-            "host": "{{ inventory_hostname }}",
+            "host": "{{ ansible_hostname }}",
             "agent_mode": "{{ agent_mode | default('site') }}",
             "playbook_repo": "Soundsfun-com/activate.leds.ansible"
           }
@@ -53,7 +61,7 @@
     - name: Record ansible-pull success
       ansible.builtin.lineinfile:
         path: /var/log/activate-wled/ansible-pull.log
-        line: "{{ ansible_date_time.iso8601 }} pull OK host={{ inventory_hostname }}"
+        line: "{{ ansible_date_time.iso8601 }} pull OK host={{ ansible_hostname }}"
         create: yes
         owner: activate-wled
         group: activate-wled

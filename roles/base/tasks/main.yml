@@ -2,17 +2,26 @@
 # base role — OS-level baseline that every Pi (site or flasher) should converge to.
 # Idempotent: re-runs are no-ops if state already matches.
 
-- name: Set hostname to match inventory entry
+- name: Set system hostname (only when desired_hostname is explicitly set)
+  # Bench Pis keep whatever Pi Imager set. Production Pis define
+  # `desired_hostname` in their host_vars file during enrollment (e.g.
+  # host_vars/activate-alpharetta.yml → desired_hostname: activate-alpharetta).
+  # NEVER fall back to inventory_hostname — under `hosts: localhost` that's
+  # literally "localhost" which would brick mDNS.
   ansible.builtin.hostname:
-    name: "{{ inventory_hostname }}"
+    name: "{{ desired_hostname }}"
     use: systemd
+  when: desired_hostname is defined
   notify: rebuild-hosts-file
 
 - name: Ensure /etc/hosts has 127.0.1.1 entry for the hostname
   ansible.builtin.lineinfile:
     path: /etc/hosts
     regexp: '^127\.0\.1\.1\s'
-    line: "127.0.1.1\t{{ inventory_hostname }}"
+    # Use the system's actual hostname (ansible_hostname is gathered by
+    # gather_facts) so /etc/hosts reflects reality regardless of whether
+    # desired_hostname was set above.
+    line: "127.0.1.1\t{{ desired_hostname | default(ansible_hostname) }}"
     state: present
 
 - name: Set system timezone
@@ -64,7 +73,7 @@
 
       ┌──────────────────────────────────────────────────────────────┐
       │  Activate WLED Pi                                            │
-      │  Host:           {{ inventory_hostname }}
+      │  Host:           {{ ansible_hostname }}
       │  Site slug:      {{ site_slug | default('(unenrolled)') }}
       │  Agent mode:     {{ agent_mode | default('site') }}
       │  Timezone:       {{ site_timezone }}
