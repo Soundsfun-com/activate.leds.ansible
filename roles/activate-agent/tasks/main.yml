@@ -20,6 +20,20 @@
   register: deploy_key_stat
   failed_when: not deploy_key_stat.stat.exists
 
+- name: Mark agent checkout as safe for root's git
+  # Git >= 2.35 refuses to operate on a repo whose .git dir is owned by a
+  # different user than the one invoking git — bails with "fatal: detected
+  # dubious ownership in repository at <path>" before doing anything else.
+  # Since we clone as root then chown to activate-wled, the SECOND run of
+  # this role would trip the check (first run is fine — git creates the
+  # checkout fresh as root). Whitelist the checkout in root's global git
+  # config so subsequent updates work as root. Idempotent.
+  community.general.git_config:
+    name: safe.directory
+    value: "{{ activate_agent_checkout }}"
+    scope: global
+    state: present
+
 - name: Clone or update agent code at the pinned ref
   # Runs as root, NOT as activate-wled — because:
   #   1. The deploy key at /etc/ansible/agent-deploy-key is root-only (0600).
