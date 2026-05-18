@@ -1,0 +1,42 @@
+# Activate WLED — agent-managed privileged commands
+# Installed by the activate.leds.ansible activate-agent role at
+# /etc/sudoers.d/activate-wled-system. DO NOT EDIT BY HAND — the next
+# ansible-pull will overwrite changes.
+#
+# These entries support the /api/v1/system/update-* endpoints from
+# PLAN §7.3.3 (Edge device firmware management). The agent runs as
+# the unprivileged `activate-wled` user with NoNewPrivileges=true; it
+# can't exec these commands directly. Each whitelisted line below maps
+# 1:1 with the argv the agent passes through `sudo`.
+#
+# Sudoers matches commands strictly: the path and the literal argument
+# tokens must match exactly. If you add a new endpoint that needs sudo,
+# add the matching line here AND in agent/system_updater.py's
+# UPDATE_COMMANDS map — mismatches surface as silent permission denials.
+
+# Trigger an immediate ansible-pull (used by /system/update-agent — the
+# pull task handles the actual agent code update via the activate-agent
+# role's git clone + chown + systemctl restart handler).
+activate-wled ALL=(root) NOPASSWD: /usr/bin/systemctl start activate-ansible-pull.service
+
+# Cloudflared client update (used by /system/update-cloudflared). Both
+# the binary update and the service restart are needed for the new
+# version to actually be in flight.
+activate-wled ALL=(root) NOPASSWD: /usr/local/bin/cloudflared update
+activate-wled ALL=(root) NOPASSWD: /usr/bin/systemctl restart cloudflared.service
+
+# OS package updates (used by /system/update-os). We split into a
+# refresh step and an upgrade step so the dashboard can show progress
+# at each phase.
+activate-wled ALL=(root) NOPASSWD: /usr/bin/apt-get update
+activate-wled ALL=(root) NOPASSWD: /usr/bin/apt-get -y upgrade
+
+# Raspberry Pi EEPROM/bootloader update (used by /system/update-eeprom).
+# rpi-eeprom-update -a applies any newer firmware; the change takes
+# effect on the next reboot.
+activate-wled ALL=(root) NOPASSWD: /usr/bin/rpi-eeprom-update -a
+
+# Pi reboot (used by /system/reboot). /sbin/reboot is a symlink to
+# /usr/bin/systemctl on modern Debian — `systemctl reboot` is the
+# canonical form sudoers matches.
+activate-wled ALL=(root) NOPASSWD: /usr/bin/systemctl reboot
