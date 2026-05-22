@@ -25,3 +25,15 @@ auto_apply_security_patches: false
 # Off-hours window (local time at each site) when reboots are allowed.
 maintenance_window_start_hour: 3   # 3 AM
 maintenance_window_end_hour: 5     # 5 AM
+
+# --- ansible-pull cadence ---------------------------------------------------
+#
+# Default (and production target) is "hourly" — matches the cadence baked
+# into the pi-gen image. While active agent development is underway we
+# bump this to a faster cadence so commits converge in minutes rather than
+# at the next hour.
+#
+# TEMPORARY (2026-05-22): set to */15 minutes for active dev work.
+# REVERT TO "hourly" once dev settles. Ormah memory `389949be` carries
+# the revert reminder across sessions.
+ansible_pull_oncalendar: "*:0/15"

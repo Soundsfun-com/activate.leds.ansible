@@ -12,3 +12,18 @@ site_timezone: America/New_York
 # Logrotate policy for /var/log/activate-wled/
 activate_log_rotate_days: 14
 activate_log_max_size_mb: 50
+
+# ansible-pull cadence — applied as a systemd drop-in override on
+# /etc/systemd/system/activate-ansible-pull.timer (baked into the pi-gen
+# image as "hourly"). Set in group_vars/all.yml; revert there.
+#
+# REVERT to "hourly" when dev settles. Higher cadence wastes GitHub
+# clone traffic + tightens the blast-radius window for a buggy commit.
+# The image's RandomizedDelaySec is preserved across overrides so the
+# fleet still doesn't stampede on the minute.
+#
+# Common values:
+#   hourly       — image default (production)
+#   *:0/15       — every 15 minutes
+#   *:0/5        — every 5 minutes (heavy dev)
+ansible_pull_oncalendar: "hourly"

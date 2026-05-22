@@ -5,3 +5,13 @@
     regexp: '^127\.0\.1\.1\s'
     line: "127.0.1.1\t{{ desired_hostname | default(ansible_hostname) }}"
     state: present
+
+- name: reload-ansible-pull-timer
+  # daemon-reload picks up the new drop-in; restart makes the next firing
+  # use the updated OnCalendar. The currently-running ansible-pull (which
+  # IS this very playbook) finishes normally; the new cadence kicks in on
+  # the next tick.
+  ansible.builtin.systemd:
+    name: activate-ansible-pull.timer
+    daemon_reload: true
+    state: restarted

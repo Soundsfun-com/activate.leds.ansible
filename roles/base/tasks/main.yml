@@ -63,6 +63,38 @@
           su activate-wled activate-wled
       }
 
+- name: Ensure ansible-pull timer override directory exists
+  # The pi-gen image bakes /etc/systemd/system/activate-ansible-pull.timer
+  # with OnCalendar=hourly. We override via a drop-in so the cadence is
+  # ansible-managed (revertable by editing `ansible_pull_oncalendar` in
+  # group_vars/all.yml and pushing). The image's RandomizedDelaySec is
+  # preserved across the override — fleet doesn't stampede regardless
+  # of cadence.
+  ansible.builtin.file:
+    path: /etc/systemd/system/activate-ansible-pull.timer.d
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Override ansible-pull timer cadence
+  # Empty OnCalendar= first clears the baked value so the second
+  # OnCalendar= replaces (rather than appends to) it.
+  ansible.builtin.copy:
+    dest: /etc/systemd/system/activate-ansible-pull.timer.d/cadence.conf
+    owner: root
+    group: root
+    mode: "0644"
+    content: |
+      # Managed by activate.leds.ansible / roles/base.
+      # Default: hourly. Bump to *:0/15 or *:0/5 during heavy dev (set
+      # `ansible_pull_oncalendar` in group_vars/all.yml). Revert when
+      # active dev settles.
+      [Timer]
+      OnCalendar=
+      OnCalendar={{ ansible_pull_oncalendar }}
+  notify: reload-ansible-pull-timer
+
 - name: Render MOTD with build + ansible-pull info
   ansible.builtin.copy:
     dest: /etc/motd
@@ -78,7 +110,7 @@
       │  Agent mode:     {{ agent_mode | default('site') }}
       │  Timezone:       {{ site_timezone }}
       │  Last ansible:   {{ ansible_date_time.iso8601 }}
-      │  Convergence by: ansible-pull (hourly, public ansible repo)
+      │  ansible-pull:   {{ ansible_pull_oncalendar }} (public ansible repo)
       └──────────────────────────────────────────────────────────────┘
       Don't edit files in /opt/activate-wled-agent/ or /etc/cloudflared/
       directly — Ansible will overwrite them on the next pull.
