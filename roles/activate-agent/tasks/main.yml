@@ -88,6 +88,20 @@
     recurse: yes
   when: agent_checkout.changed
 
+- name: Grant activate-wled access to systemd-journal for /system/logs
+  # The agent's /api/v1/system/logs endpoint shells out to `journalctl -u
+  # activate-wled-agent` so the dashboard can pull recent log lines without
+  # SSH. journalctl as a non-root user requires `systemd-journal` group
+  # membership to read other units' journals (including its own when running
+  # under systemd's restricted scope). Append-only group change; the
+  # restart handler picks up the new gid on the next service restart so
+  # the running process actually inherits read permissions.
+  ansible.builtin.user:
+    name: activate-wled
+    groups: systemd-journal
+    append: yes
+  notify: restart-activate-wled-agent
+
 - name: Install sudoers drop-in for agent-managed privileged commands
   # The agent runs as activate-wled with NoNewPrivileges=true. A narrow
   # NOPASSWD whitelist gives the /api/v1/system/update-* endpoints
