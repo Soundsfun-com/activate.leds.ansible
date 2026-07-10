@@ -1,0 +1,40 @@
+#!/bin/bash
+#
+# activate-apply-tunnel — install/refresh the cloudflared tunnel from the
+# token the provisioning claim wrote to /etc/activate-wled/cloudflared-token.
+#
+# Installed by the activate.leds.ansible activate-agent role at
+# /usr/local/sbin/activate-apply-tunnel (root, 0755) and whitelisted in
+# /etc/sudoers.d/activate-wled-system so the agent can invoke it right at
+# claim time. Also safe to run by hand. Idempotent: re-running with the
+# same or a new token converges to a running tunnel.
+set -euo pipefail
+
+TOKEN_FILE="/etc/activate-wled/cloudflared-token"
+CLOUDFLARED="$(command -v cloudflared || echo /usr/local/bin/cloudflared)"
+
+if [[ $EUID -ne 0 ]]; then
+  echo "ERROR: must run as root (installs a systemd service)." >&2
+  exit 1
+fi
+if [[ ! -x "$CLOUDFLARED" ]]; then
+  echo "ERROR: cloudflared not found." >&2
+  exit 1
+fi
+if [[ ! -s "$TOKEN_FILE" ]]; then
+  echo "ERROR: no token at $TOKEN_FILE — assign this Pi from the dashboard first." >&2
+  exit 1
+fi
+
+TOKEN="$(head -n1 "$TOKEN_FILE" | tr -d '[:space:]')"
+
+# `cloudflared service install` refuses to overwrite an existing unit, so
+# uninstall first when present. Uninstall is a no-op error when absent.
+if systemctl list-unit-files cloudflared.service --no-legend 2>/dev/null | grep -q cloudflared; then
+  "$CLOUDFLARED" service uninstall || true
+  systemctl daemon-reload
+fi
+
+"$CLOUDFLARED" service install "$TOKEN"
+systemctl enable --now cloudflared.service 2>/dev/null || systemctl enable --now cloudflared || true
+echo "cloudflared tunnel installed and started."

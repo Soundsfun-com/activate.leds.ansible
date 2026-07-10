@@ -40,3 +40,8 @@ activate-wled ALL=(root) NOPASSWD: /usr/bin/rpi-eeprom-update -a
 # /usr/bin/systemctl on modern Debian — `systemctl reboot` is the
 # canonical form sudoers matches.
 activate-wled ALL=(root) NOPASSWD: /usr/bin/systemctl reboot
+
+# Apply the cloudflared tunnel token written by the provisioning claim
+# (used by agent/provisioning.py right after a Pi is assigned to a
+# location — the token file lives at /etc/activate-wled/cloudflared-token).
+activate-wled ALL=(root) NOPASSWD: /usr/local/sbin/activate-apply-tunnel

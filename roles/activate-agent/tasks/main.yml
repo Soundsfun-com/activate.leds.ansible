@@ -102,6 +102,39 @@
     append: yes
   notify: restart-activate-wled-agent
 
+- name: Install the tunnel-apply helper (provisioning claim → cloudflared)
+  # Root helper that installs/refreshes the cloudflared service from the
+  # token the provisioning claim writes to /etc/activate-wled/
+  # cloudflared-token. Invoked via sudo by agent/provisioning.py at claim
+  # time (whitelisted below); also safe to run by hand.
+  ansible.builtin.copy:
+    src: activate-apply-tunnel
+    dest: /usr/local/sbin/activate-apply-tunnel
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Check whether a claimed tunnel token is waiting to be applied
+  # Fallback for when the agent's sudo call at claim time failed (helper
+  # not yet installed, older sudoers, etc.) — the hourly pull converges.
+  ansible.builtin.stat:
+    path: /etc/activate-wled/cloudflared-token
+  register: tunnel_token_file
+
+- name: Probe cloudflared service state
+  ansible.builtin.systemd:
+    name: cloudflared
+  register: cloudflared_state
+  failed_when: false
+  when: tunnel_token_file.stat.exists
+
+- name: Apply the claimed tunnel token
+  ansible.builtin.command: /usr/local/sbin/activate-apply-tunnel
+  when: >-
+    tunnel_token_file.stat.exists and
+    (cloudflared_state.status is not defined or
+     cloudflared_state.status.ActiveState | default('inactive') != 'active')
+
 - name: Install sudoers drop-in for agent-managed privileged commands
   # The agent runs as activate-wled with NoNewPrivileges=true. A narrow
   # NOPASSWD whitelist gives the /api/v1/system/update-* endpoints
