@@ -29,9 +29,16 @@ fi
 TOKEN="$(head -n1 "$TOKEN_FILE" | tr -d '[:space:]')"
 
 # `cloudflared service install` refuses to overwrite an existing unit, so
-# uninstall first when present. Uninstall is a no-op error when absent.
-if systemctl list-unit-files cloudflared.service --no-legend 2>/dev/null | grep -q cloudflared; then
-  "$CLOUDFLARED" service uninstall || true
+# clean up first. Detect via the FILE, not systemctl — a half-installed
+# unit (e.g. the image's baked disabled one, or an interrupted prior
+# install) can sit on disk without systemd listing it, which made the
+# old list-unit-files check miss it and the install fail with
+# "already installed" (bench-lab Pi5 first-boot, 2026-07-13).
+if [[ -f /etc/systemd/system/cloudflared.service ]]; then
+  "$CLOUDFLARED" service uninstall 2>/dev/null || true
+  rm -f /etc/systemd/system/cloudflared.service \
+        /etc/systemd/system/cloudflared-update.service \
+        /etc/systemd/system/cloudflared-update.timer
   systemctl daemon-reload
 fi
 
