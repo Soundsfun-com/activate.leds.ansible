@@ -22,6 +22,19 @@
     mode: "0644"
   notify: restart-sshd
 
+# --- 1b. lock the account password ------------------------------------------
+# The pi-gen image ships with a placeholder password (pi-gen requires one)
+# that was supposed to be "rotated by ansible" but never was — the
+# 2026-07-13 Pi 5 first-boot debug used it for sudo. Lock it outright:
+# access is SSH-key-only (sshd hardening above) and privileged commands go
+# through the NOPASSWD sudoers whitelists. Locking beats rotating — there's
+# no new secret to store or leak. Console recovery = pull the SD card.
+
+- name: Lock the activate-wled account password
+  ansible.builtin.user:
+    name: activate-wled
+    password_lock: yes
+
 # --- 2. unattended-upgrades (security patches) ------------------------------
 
 - name: Install unattended-upgrades package
