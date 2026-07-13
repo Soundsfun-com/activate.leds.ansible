@@ -25,5 +25,5 @@ ACTION=="add", SUBSYSTEM=="tty", ATTRS{idVendor}=="10c4|1a86|0403|303a", \
 # unprivileged) toggles brightness with trigger=none for 60s so a tech can
 # spot the right Pi among several unassigned ones. Grant group write on
 # exactly the two attributes the blink uses (agent/provisioning.py).
-ACTION=="add", SUBSYSTEM=="leds", KERNEL=="ACT|led0", \
+ACTION=="add|change", SUBSYSTEM=="leds", KERNEL=="ACT|led0", \
     RUN+="/bin/sh -c 'chgrp activate-wled /sys%p/trigger /sys%p/brightness && chmod g+w /sys%p/trigger /sys%p/brightness'"
