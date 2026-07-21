@@ -1,39 +1,6 @@
-# Fleet-wide defaults. Every Pi reads these unless overridden by group_vars/canary.yml
-# or host_vars/<slug>.yml.
-#
-# Bulk updates from the dashboard's /firmware → Edge Devices tab edit these vars,
-# commit, and push. The fleet converges within ~1h.
-
-# --- Component version pins --------------------------------------------------
-
-# Agent code: which ref of Soundsfun-com/activate.leds.agent to deploy.
-# "main" = always latest; pin to a tag/sha for stability.
-# The activate-agent role clones the repo via SSH using the deploy key
-# baked into the pi-gen image at /etc/ansible/agent-deploy-key.
 activate_agent_ref: main
-
-# Cloudflared: pinned to match the version baked into the pi-gen image.
-# Roll forward via this var; Ansible will install the new .deb on next pull.
-cloudflared_version: "2024.12.2"
-
-# --- Behavior ----------------------------------------------------------------
-
-# Whether to apply OS security patches automatically. Off by default until
-# we've validated the unattended-upgrades policy on the canary group.
+cloudflared_version: 2026.7.2
 auto_apply_security_patches: false
-
-# Off-hours window (local time at each site) when reboots are allowed.
-maintenance_window_start_hour: 3   # 3 AM
-maintenance_window_end_hour: 5     # 5 AM
-
-# --- ansible-pull cadence ---------------------------------------------------
-#
-# Default (and production target) is "hourly" — matches the cadence baked
-# into the pi-gen image. While active agent development is underway we
-# bump this to a faster cadence so commits converge in minutes rather than
-# at the next hour.
-#
-# TEMPORARY (2026-05-22): set to */15 minutes for active dev work.
-# REVERT TO "hourly" once dev settles. Ormah memory `389949be` carries
-# the revert reminder across sessions.
-ansible_pull_oncalendar: "*:0/15"
+maintenance_window_start_hour: 3
+maintenance_window_end_hour: 5
+ansible_pull_oncalendar: '*:0/15'
