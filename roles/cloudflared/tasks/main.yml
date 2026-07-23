@@ -1,0 +1,34 @@
+---
+# Converge the cloudflared (Cloudflare Tunnel client) binary to the
+# `cloudflared_version` pin from group_vars/all.yml.
+#
+# The pi-gen image bakes cloudflared as a STANDALONE binary at
+# /usr/local/bin/cloudflared (not the .deb), and `cloudflared service
+# install` (run by activate-apply-tunnel at claim time) writes the systemd
+# unit pointing at that absolute path. Updating therefore means replacing
+# the binary IN PLACE — installing the .deb instead would land a new copy
+# at /usr/bin while the service (and the agent's sudoers-whitelisted
+# /usr/local/bin path) kept running the old one.
+
+- name: Check installed cloudflared version
+  ansible.builtin.command: /usr/local/bin/cloudflared --version
+  register: cloudflared_installed
+  changed_when: false
+  failed_when: false
+
+- name: Download pinned cloudflared binary
+  # get_url downloads to a temp file and RENAMES into place — atomic, so
+  # replacing the binary is safe while the tunnel is running ("text file
+  # busy" only bites in-place writes, not renames). Pis are aarch64
+  # (Pi 4/5) → the arm64 release asset.
+  ansible.builtin.get_url:
+    url: "https://github.com/cloudflare/cloudflared/releases/download/{{ cloudflared_version }}/cloudflared-linux-arm64"
+    dest: /usr/local/bin/cloudflared
+    owner: root
+    group: root
+    mode: "0755"
+    force: true
+  when: >-
+    cloudflared_installed.rc != 0
+    or (cloudflared_version | string) not in cloudflared_installed.stdout
+  notify: restart-cloudflared

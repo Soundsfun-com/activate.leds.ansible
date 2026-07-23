@@ -1,0 +1,7 @@
+---
+- name: restart-cloudflared
+  # try-restart restarts the unit ONLY if it is already running — a Pi that
+  # hasn't been claimed yet has no cloudflared.service installed; the fresh
+  # binary just waits for enrollment (activate-apply-tunnel).
+  ansible.builtin.command: systemctl try-restart cloudflared.service
+  changed_when: true

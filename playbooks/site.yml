@@ -1,10 +1,8 @@
 ---
 # The ansible-pull target. Runs hourly on every Pi.
 #
-# v1 scope: base + udev-rules + security roles (OS-only convergence).
-# Not yet implemented (waiting on agent-code-repo decision):
-#   - cloudflared role (version pinning)
-#   - activate-agent role (clone + install agent code, manage systemd unit)
+# Scope: base + udev-rules + security + activate-agent + cloudflared —
+# full convergence (OS config, agent code ref, tunnel client version).
 
 - name: Activate WLED fleet convergence
   # Targets `localhost` because each Pi runs `ansible-pull` against itself —
@@ -55,7 +53,7 @@
     - role: udev-rules
     - role: security
     - role: activate-agent
-    # - role: cloudflared     # TODO: tunnel version pinning
+    - role: cloudflared
 
   post_tasks:
     - name: Record ansible-pull success

@@ -1,0 +1,4 @@
+---
+# Fallback only — the real pin lives in group_vars/all.yml and is managed
+# from the dashboard's Edge Devices → software pins panel.
+cloudflared_version: "2024.12.2"
