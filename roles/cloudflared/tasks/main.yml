@@ -2,16 +2,39 @@
 # Converge the cloudflared (Cloudflare Tunnel client) binary to the
 # `cloudflared_version` pin from group_vars/all.yml.
 #
-# The pi-gen image bakes cloudflared as a STANDALONE binary at
-# /usr/local/bin/cloudflared (not the .deb), and `cloudflared service
-# install` (run by activate-apply-tunnel at claim time) writes the systemd
-# unit pointing at that absolute path. Updating therefore means replacing
-# the binary IN PLACE — installing the .deb instead would land a new copy
-# at /usr/bin while the service (and the agent's sudoers-whitelisted
-# /usr/local/bin path) kept running the old one.
+# LAYOUT (verified against the actual .deb, 2026-07-25 — the previous version
+# of this file asserted the opposite and was wrong):
+#   * Cloudflare's .deb ships exactly ONE binary, /usr/bin/cloudflared, and its
+#     postinst does `ln -s /usr/bin/cloudflared /usr/local/bin/cloudflared`.
+#   * The pi-gen image `dpkg -i`s that .deb, so every Pi has the real file at
+#     /usr/bin and a symlink at /usr/local/bin.
+#   * `activate-apply-tunnel` picks its binary with `command -v cloudflared`
+#     (→ the /usr/local/bin symlink) and runs `cloudflared service install`,
+#     which bakes that absolute path into the unit's ExecStart.
+#
+# So we converge the REAL file at /usr/bin/cloudflared and keep /usr/local/bin
+# a symlink to it. Writing the symlink path instead would leave two divergent
+# binaries on disk and make "which version is actually running?" depend on
+# which path a given caller happened to resolve.
+
+- name: Resolve the real cloudflared binary (following the .deb's symlink)
+  ansible.builtin.stat:
+    path: /usr/local/bin/cloudflared
+  register: cloudflared_local
+
+- name: Choose the managed binary path
+  ansible.builtin.set_fact:
+    # readlink target when /usr/local/bin is the .deb's symlink; otherwise
+    # whatever real file is there; falling back to the .deb's own location.
+    cloudflared_bin: >-
+      {{ cloudflared_local.stat.lnk_target
+         if (cloudflared_local.stat.exists | default(false)) and (cloudflared_local.stat.islnk | default(false))
+         else ('/usr/local/bin/cloudflared'
+               if (cloudflared_local.stat.exists | default(false))
+               else '/usr/bin/cloudflared') }}
 
 - name: Check installed cloudflared version
-  ansible.builtin.command: /usr/local/bin/cloudflared --version
+  ansible.builtin.command: "{{ cloudflared_bin }} --version"
   register: cloudflared_installed
   changed_when: false
   failed_when: false
@@ -21,14 +44,36 @@
   # replacing the binary is safe while the tunnel is running ("text file
   # busy" only bites in-place writes, not renames). Pis are aarch64
   # (Pi 4/5) → the arm64 release asset.
+  #
+  # RETRIES: this is the last role in site.yml and reaches out to
+  # github.com from a store's network. A single blip here aborts the whole
+  # ansible-pull with nothing surfaced anywhere — which is the leading
+  # explanation for the fleet sitting on the image's 2024.12.2 for days after
+  # the pin moved. Retry before giving up.
   ansible.builtin.get_url:
     url: "https://github.com/cloudflare/cloudflared/releases/download/{{ cloudflared_version }}/cloudflared-linux-arm64"
-    dest: /usr/local/bin/cloudflared
+    dest: "{{ cloudflared_bin }}"
     owner: root
     group: root
     mode: "0755"
     force: true
+    timeout: 60
+  register: cloudflared_download
+  retries: 3
+  delay: 10
+  until: cloudflared_download is succeeded
   when: >-
     cloudflared_installed.rc != 0
     or (cloudflared_version | string) not in cloudflared_installed.stdout
   notify: restart-cloudflared
+
+- name: Keep /usr/local/bin/cloudflared pointing at the managed binary
+  # The .deb's postinst makes this symlink; recreate it if anything (an older
+  # revision of this role, a manual fix) replaced it with a stale real file.
+  # One binary on disk ⇒ every caller sees the same version.
+  ansible.builtin.file:
+    src: "{{ cloudflared_bin }}"
+    dest: /usr/local/bin/cloudflared
+    state: link
+    force: true
+  when: cloudflared_bin != '/usr/local/bin/cloudflared'

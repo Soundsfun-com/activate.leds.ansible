@@ -64,3 +64,23 @@
         owner: activate-wled
         group: activate-wled
         mode: "0644"
+
+    # Success is now recorded as STATE, not just a log line, so a failed pull
+    # is visible rather than merely absent. Before this, a role failing (say
+    # the cloudflared download losing its way out of a store's network) aborted
+    # the play silently: post_tasks never ran, nothing was written, and the
+    # fleet simply stopped converging with no signal anywhere. That is how the
+    # cloudflared pin sat unapplied for days.
+    - name: Record last successful convergence
+      ansible.builtin.copy:
+        dest: /var/lib/activate-wled/last-ansible-pull-ok.json
+        owner: activate-wled
+        group: activate-wled
+        mode: "0644"
+        content: |
+          {
+            "finished_at": "{{ ansible_date_time.iso8601 }}",
+            "host": "{{ ansible_hostname }}",
+            "cloudflared_version": "{{ cloudflared_version | default('unset') }}",
+            "activate_agent_ref": "{{ activate_agent_ref | default('unset') }}"
+          }
