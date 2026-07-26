@@ -1,19 +1,6 @@
-# Fleet-wide inventory vars.
-#
-# LOCATION MATTERS: this file must live NEXT TO THE INVENTORY
-# (inventory/group_vars/all.yml). Ansible resolves group_vars relative to the
-# inventory file or the playbook — never the repo root. It sat at the repo root
-# until 2026-07-26, where nothing loaded it, so every pin here was inert: the
-# fleet ran the version baked into the Pi image while the dashboard reported
-# the pin as applied. `inventory_vars_loaded` below is the tripwire for that.
-
-# Sentinel — deliberately has NO role default anywhere. site.yml asserts it in
-# pre_tasks, so if this file ever stops being loaded the hourly run fails loudly
-# on the first Pi instead of silently falling back to stale role defaults.
 inventory_vars_loaded: true
-
 activate_agent_ref: main
-cloudflared_version: 2026.7.2
+cloudflared_version: 2026.7.3
 auto_apply_security_patches: false
 maintenance_window_start_hour: 3
 maintenance_window_end_hour: 5
