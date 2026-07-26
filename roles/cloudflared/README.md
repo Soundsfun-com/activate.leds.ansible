@@ -1,7 +1,7 @@
 # role: cloudflared
 
 Pins the `cloudflared` (Cloudflare Tunnel client) version on every Pi: a
-bumped `cloudflared_version` in `group_vars/all.yml` (set from the
+bumped `cloudflared_version` in `inventory/group_vars/all.yml` (set from the
 dashboard's Edge Devices → software pins panel) propagates to the fleet on
 the next ansible-pull.
 
@@ -41,4 +41,4 @@ older.
 
 | Var | Default | Notes |
 |---|---|---|
-| `cloudflared_version` | from `group_vars/all.yml` | Release tag, e.g. `2026.7.2` |
+| `cloudflared_version` | from `inventory/group_vars/all.yml` | Release tag, e.g. `2026.7.2`. **No role default on purpose** — an unloaded pin must fail the run, not silently reuse a stale version. |

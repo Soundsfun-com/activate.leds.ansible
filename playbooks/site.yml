@@ -16,6 +16,30 @@
   gather_facts: yes
 
   pre_tasks:
+    # FIRST, before anything converges: prove the inventory vars actually
+    # loaded. They live in inventory/group_vars/, and Ansible resolves those
+    # relative to the inventory or the playbook — put them anywhere else and
+    # they are silently ignored. That happened: group_vars/all.yml sat at the
+    # repo root for weeks, so `cloudflared_version: 2026.7.2` never reached a
+    # Pi. Roles fell back to their own defaults, the versions matched what was
+    # installed, every task was skipped, and each hourly run reported success
+    # while the fleet stayed on the image's 2024.12.2.
+    #
+    # `inventory_vars_loaded` exists only in that file and has no role default,
+    # so this assert is the one thing that can tell the difference between "no
+    # changes needed" and "the pins never arrived".
+    - name: Assert inventory vars loaded
+      ansible.builtin.assert:
+        that:
+          - inventory_vars_loaded | default(false) | bool
+        fail_msg: >-
+          inventory/group_vars/all.yml did not load. Ansible reads group_vars
+          next to the INVENTORY (inventory/group_vars/) or the playbook — not
+          the repo root. Until this is fixed every version pin is inert and
+          roles silently use their own defaults.
+        success_msg: "Inventory vars loaded (cloudflared_version={{ cloudflared_version }})"
+      tags: [always]
+
     - name: Ensure /var/log/activate-wled/ exists
       ansible.builtin.file:
         path: /var/log/activate-wled

@@ -1,4 +1,15 @@
 ---
-# Fallback only — the real pin lives in group_vars/all.yml and is managed
-# from the dashboard's Edge Devices → software pins panel.
-cloudflared_version: "2024.12.2"
+# INTENTIONALLY EMPTY — do not add `cloudflared_version` back here.
+#
+# This role used to default it to "2024.12.2", and that default silently ate a
+# real fleet bug. `group_vars/all.yml` was sitting at the REPO ROOT, where
+# Ansible never looks for it (group vars resolve next to the INVENTORY or the
+# playbook), so the pin never loaded and every run fell back to this default.
+# The default happened to equal the version already installed, so the version
+# check passed, the download was skipped, and each hourly run reported success
+# while changing nothing. The fleet sat on 2024.12.2 while the dashboard showed
+# a 2026.7.2 pin.
+#
+# With no default, an unloaded `cloudflared_version` is an undefined-variable
+# error that fails the run loudly on the first Pi — which is exactly what you
+# want from a pin that isn't reaching the fleet.

@@ -20,13 +20,13 @@ See [`SECURITY.md`](./SECURITY.md) for the full "what's not in this repo" list a
 
 ```
 .
-├── inventory/
-│   └── 28-stores.yml              # one host entry per Pi (28 sites + flashers)
-├── group_vars/
-│   ├── all.yml                    # fleet-wide defaults
-│   └── canary.yml                 # canary-group overrides (staged-rollout source)
-├── host_vars/
-│   └── <slug>.yml                 # per-site pins (rare; e.g. "don't upgrade Buckhead tonight")
+├── inventory/                     # ALL vars live under here — see the note below
+│   ├── 28-stores.yml              # one host entry per Pi (28 sites + flashers)
+│   ├── group_vars/
+│   │   ├── all.yml                # fleet-wide defaults + the inventory_vars_loaded sentinel
+│   │   └── canary.yml             # canary-group overrides (staged-rollout source)
+│   └── host_vars/
+│       └── <slug>.yml             # per-site pins (rare; e.g. "don't upgrade Buckhead tonight")
 ├── playbooks/
 │   └── site.yml                   # the ansible-pull target — runs every hour on every Pi
 └── roles/
@@ -52,14 +52,16 @@ Each Pi's image (built by [`Soundsfun-com/activate.leds.dashboard`](https://gith
     playbooks/site.yml
   ```
 
-A change pushed to `main` propagates to the fleet within ~1h. Bulk updates (e.g. agent version bump) happen by editing `group_vars/all.yml` and pushing.
+A change pushed to `main` propagates to the fleet within ~1h. Bulk updates (e.g. agent version bump) happen by editing `inventory/group_vars/all.yml` and pushing.
+
+> **group_vars/host_vars MUST stay under `inventory/`.** Ansible resolves them relative to the inventory file or the playbook — never the repo root. They lived at the repo root until 2026-07-26, so nothing loaded them: roles fell back to their own defaults, those defaults matched what was already installed, every task was skipped, and each hourly run reported success while the fleet stayed on the version baked into the Pi image. `inventory/group_vars/all.yml` now carries an `inventory_vars_loaded` sentinel that `site.yml` asserts in pre_tasks, so a repeat fails loudly on the first Pi instead of hiding for weeks.
 
 ## Staged rollouts
 
 The dashboard's `/firmware` Edge Devices tab (forthcoming) drives staged rollouts by editing this repo:
 
-1. **Canary**: change goes into `group_vars/canary.yml` first; only Pis in the `canary` inventory group pick it up. Soak ~24h.
-2. **All**: promote to `group_vars/all.yml`. Fleet converges within 1h.
+1. **Canary**: change goes into `inventory/group_vars/canary.yml` first; only Pis in the `canary` inventory group pick it up. Soak ~24h.
+2. **All**: promote to `inventory/group_vars/all.yml`. Fleet converges within 1h.
 3. **Rollback**: `git revert` the offending commit. Fleet converges back within 1h. No special tooling.
 
 ## Sibling repos
