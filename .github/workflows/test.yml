@@ -1,0 +1,48 @@
+name: test
+
+# The config in this repo drives 28 stores' worth of hardware and there was no
+# automated check on any of it. Two silent breakages shipped as a result: vars
+# files that Ansible never loaded, and per-site config that no Pi ever read.
+# Both were green all the way — nothing failed, the values just never arrived.
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  site-identity:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install ansible-core
+        run: pip install --quiet ansible-core
+
+      - name: Install collections
+        # Same list ansible-pull installs on each Pi. Without these the syntax
+        # check can't resolve community.general.timezone and fails for a reason
+        # that has nothing to do with the change under test.
+        run: ansible-galaxy collection install -r requirements.yml
+
+      - name: Playbook + role syntax
+        run: ansible-playbook --syntax-check playbooks/site.yml
+
+      - name: Per-site config resolution (canary + pins + precedence)
+        run: tests/test_site_identity.sh
+
+      - name: Inventory vars live next to the inventory
+        # The failure that started all this: group_vars at the repo root, where
+        # Ansible never looks. Cheap to assert, impossible to notice by hand.
+        run: |
+          test -f inventory/group_vars/all.yml \
+            || { echo "::error::inventory/group_vars/all.yml is missing — vars must sit NEXT TO the inventory, not at the repo root"; exit 1; }
+          if [ -d group_vars ] || [ -d host_vars ]; then
+            echo "::error::group_vars/ or host_vars/ exists at the repo root. Ansible resolves them relative to the inventory or the playbook, so anything here is silently ignored. Move it under inventory/."
+            exit 1
+          fi
+          grep -q '^inventory_vars_loaded:' inventory/group_vars/all.yml \
+            || { echo "::error::the inventory_vars_loaded sentinel is gone; site.yml asserts it to prove vars actually loaded"; exit 1; }

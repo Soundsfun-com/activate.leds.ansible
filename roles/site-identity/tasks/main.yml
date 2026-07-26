@@ -1,0 +1,79 @@
+---
+# Give this Pi an identity, then layer its per-site config on top.
+#
+# THE PROBLEM THIS SOLVES: every Pi converges itself with `hosts: localhost`, so
+# to Ansible each one is the same anonymous implicit localhost. It belongs to no
+# group and matches no inventory host, which means group_vars/all.yml is the
+# ONLY vars file that can ever reach it — verified against ansible-core 2.15 on
+# 2026-07-26. Per-site pins (host_vars/<slug>.yml) and canary overrides
+# (group_vars/canary.yml) were both written faithfully by the dashboard and then
+# read by nothing at all. Staged rollout has never actually worked.
+#
+# The fix doesn't need inventory hosts or a new enrollment step: the Pi already
+# knows which store it is, because enrollment wrote `site_slug` into
+# agent.toml. Read that, then include the matching vars files by hand.
+#
+# PRECEDENCE (weakest → strongest), which is what makes rollout usable:
+#   1. inventory/group_vars/all.yml   — the fleet default
+#   2. inventory/group_vars/canary.yml — if this slug is in `canary_sites`
+#   3. inventory/host_vars/<slug>.yml  — this one store's pin
+# `include_vars` outranks inventory vars, and a later include outranks an
+# earlier one, so a per-site pin beats canary, which beats the fleet.
+
+- name: Look for the agent's provisioning config
+  ansible.builtin.stat:
+    path: "{{ agent_config_path }}"
+  register: site_identity_cfg
+
+- name: Read this Pi's site slug from agent.toml
+  when: site_identity_cfg.stat.exists
+  block:
+    - name: Slurp agent.toml
+      ansible.builtin.slurp:
+        src: "{{ agent_config_path }}"
+      register: site_identity_raw
+
+    - name: Extract site_slug
+      # agent.toml is written by the enrollment flow as:
+      #   [cloud]
+      #   site_slug = "warehouse"
+      # A tiny regex beats adding a TOML parser dependency to every Pi.
+      ansible.builtin.set_fact:
+        site_slug: >-
+          {{ (site_identity_raw.content | b64decode
+              | regex_search('site_slug\s*=\s*"([^"]+)"', '\1')
+              | default([''], true) | first) | trim }}
+
+- name: Report the resolved identity
+  ansible.builtin.debug:
+    msg: >-
+      site_slug={{ site_slug | default('(unclaimed)') }}
+      canary={{ (site_slug | default('')) in (canary_sites | default([])) }}
+  tags: [always]
+
+# An unclaimed Pi (imaged but never assigned to a store) has no agent.toml and
+# therefore no slug. It still converges on fleet defaults — it just can't take
+# site-specific config, which is correct: it isn't a site yet.
+
+- name: Apply canary overrides when this site is in the canary list
+  ansible.builtin.include_vars:
+    file: "{{ site_vars_dir }}/group_vars/canary.yml"
+  when:
+    - site_slug | default('') | length > 0
+    - site_slug in (canary_sites | default([]))
+
+- name: Look for a per-site pin file
+  ansible.builtin.stat:
+    path: "{{ site_vars_dir }}/host_vars/{{ site_slug }}.yml"
+  when: site_slug | default('') | length > 0
+  register: site_identity_pin
+
+- name: Apply per-site pins
+  # Highest precedence: an operator pinning ONE store — to hold it back before a
+  # busy event, or to roll it back during an incident — must beat both the
+  # canary set and the fleet default.
+  ansible.builtin.include_vars:
+    file: "{{ site_vars_dir }}/host_vars/{{ site_slug }}.yml"
+  when:
+    - site_slug | default('') | length > 0
+    - site_identity_pin.stat.exists | default(false)

@@ -1,0 +1,17 @@
+---
+# Where the agent's provisioning config lives. The enrollment flow writes it
+# per Pi; it carries the one thing that tells this machine WHICH STORE it is.
+# Overridable so the test suite can point at a fixture instead of /etc.
+agent_config_path: /etc/activate-wled/agent.toml
+
+# Root of the inventory vars tree. ansible-pull runs playbooks/site.yml, so
+# playbook_dir is <checkout>/playbooks and this resolves to <checkout>/inventory.
+site_vars_dir: "{{ playbook_dir }}/../inventory"
+
+# Sites that take canary overrides, by SLUG — not an inventory group.
+#
+# The inventory `canary` group could never work: every Pi converges itself with
+# `hosts: localhost`, so it is Ansible's implicit localhost, which belongs to no
+# group. Only group_vars/all.yml reaches it. A slug list in all.yml does reach
+# every Pi, and each one decides for itself whether it's a canary.
+canary_sites: []

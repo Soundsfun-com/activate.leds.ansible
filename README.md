@@ -56,6 +56,13 @@ Each Pi's image (built by [`Soundsfun-com/activate.leds.dashboard`](https://gith
 
 A change pushed to `main` propagates to the fleet within ~1h. Bulk updates (e.g. agent version bump) happen by editing `inventory/group_vars/all.yml` and pushing.
 
+> **`inventory/group_vars/all.yml` is MACHINE-MANAGED — don't put comments in it.**
+> The dashboard's pin/promote actions round-trip that file through a YAML
+> parser, so every comment is silently erased on the next write (confirmed
+> 2026-07-26 when a fleet promote to cloudflared 2026.7.3 stripped a block of
+> explanation). Keys survive; prose does not. Durable explanation goes here, in
+> role comments, or in the CI guard — not in that file.
+
 > **group_vars/host_vars MUST stay under `inventory/`.** Ansible resolves them relative to the inventory file or the playbook — never the repo root. They lived at the repo root until 2026-07-26, so nothing loaded them: roles fell back to their own defaults, those defaults matched what was already installed, every task was skipped, and each hourly run reported success while the fleet stayed on the version baked into the Pi image. `inventory/group_vars/all.yml` now carries an `inventory_vars_loaded` sentinel that `site.yml` asserts in pre_tasks, so a repeat fails loudly on the first Pi instead of hiding for weeks.
 
 ## Staged rollouts

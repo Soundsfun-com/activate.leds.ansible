@@ -73,6 +73,11 @@
           }
 
   roles:
+    # FIRST, always: resolves this Pi's site slug and layers canary + per-site
+    # vars on top of the fleet defaults. Every role after it reads the resolved
+    # values, so it cannot be reordered without silently reverting staged
+    # rollout to fleet-wide-only.
+    - role: site-identity
     - role: base
     - role: udev-rules
     - role: security
