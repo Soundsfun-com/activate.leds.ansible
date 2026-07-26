@@ -21,12 +21,14 @@ See [`SECURITY.md`](./SECURITY.md) for the full "what's not in this repo" list a
 ```
 .
 ├── inventory/                     # ALL vars live under here — see the note below
-│   ├── 28-stores.yml              # one host entry per Pi (28 sites + flashers)
+│   ├── 28-stores.yml              # ZERO hosts despite the name — see the file's header.
+│   │                              # Name is baked into every Pi's systemd unit; do NOT rename.
 │   ├── group_vars/
 │   │   ├── all.yml                # fleet-wide defaults + the inventory_vars_loaded sentinel
 │   │   └── canary.yml             # canary-group overrides (staged-rollout source)
 │   └── host_vars/
-│       └── <slug>.yml             # per-site pins (rare; e.g. "don't upgrade Buckhead tonight")
+│       └── <slug>.yml             # ⚠️ NON-FUNCTIONAL today — the play runs as `localhost`,
+│                                  # so these are written by the dashboard and never read
 ├── playbooks/
 │   └── site.yml                   # the ansible-pull target — runs every hour on every Pi
 └── roles/

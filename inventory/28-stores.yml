@@ -1,12 +1,28 @@
-# Inventory of every Pi in the Activate WLED fleet.
+# Inventory for the Activate WLED fleet.
 #
-# Each Pi reads this file at `ansible-pull` time but only converges its OWN entry
-# (matched by `ansible_facts.hostname`). The same inventory file therefore drives
-# the whole fleet from a single source of truth.
+# ⚠️ THE NAME LIES, AND ON PURPOSE. There are no "28 stores" in here — there are
+# ZERO hosts, and there never have been. The filename is load-bearing: every Pi
+# image bakes `--inventory inventory/28-stores.yml` into
+# activate-ansible-pull.service, so renaming this file breaks convergence on the
+# whole fleet until each Pi is re-flashed. Leave the name; read this comment.
 #
-# Hosts populate organically — when the dashboard's /sites/new flow provisions a
-# new location, a cloud worker appends a host entry here via the GitHub API and
-# commits. Until then this file is mostly empty.
+# WHAT THIS FILE ACTUALLY DOES: almost nothing except anchor the location of
+# group_vars/ and host_vars/. `playbooks/site.yml` targets `hosts: localhost`
+# (each Pi converges ITSELF via ansible-pull), so the play runs against Ansible's
+# IMPLICIT localhost. Verified 2026-07-26 against ansible-core 2.15:
+#   * group_vars/all.yml DOES apply to implicit localhost, despite the
+#     "implicit localhost does not match 'all'" warning. Fleet-wide pins work.
+#   * host_vars/<slug>.yml does NOT. The running host is `localhost`, not
+#     `activate-<slug>`, so per-site pins written by the dashboard's
+#     firmware.pinSite are committed and then never read by anything.
+#
+# So per-site pinning is not "rarely used" — it is non-functional. Making it work
+# needs the play to learn its own site slug (agent.toml has `site_slug`) and
+# include_vars that file explicitly; that's a design change, not a config tweak.
+#
+# The groups below are likewise inert: the earlier plan was for the dashboard's
+# Add Location flow to append host entries here, and no code was ever written to
+# do it. They're kept because group_vars/canary.yml references the canary group.
 
 all:
   children:
