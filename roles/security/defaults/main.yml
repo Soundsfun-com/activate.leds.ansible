@@ -1,8 +1,14 @@
 ---
 # Security baseline defaults. Override in group_vars/all.yml.
 
-# Whether unattended-upgrades automatically applies security patches.
-# Defaults to false until we've validated the policy on canary Pis.
+# Whether unattended-upgrades automatically APPLIES security patches (it
+# always downloads them). False here as the safe fallback for a host that
+# somehow gets no group_vars; the fleet value lives in inventory/group_vars.
+#
+# When true, two things move into the maintenance window: the upgrade run
+# itself (via an apt-daily-upgrade.timer drop-in) and any reboot a patch
+# requires. Both are pointless without the other — patches installed at 6am
+# with a reboot deferred to 3am the next night is the worst of both.
 auto_apply_security_patches: false
 
 # Whether to install + enable fail2ban (SSH brute-force protection).

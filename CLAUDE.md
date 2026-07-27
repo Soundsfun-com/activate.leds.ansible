@@ -37,6 +37,24 @@ inventory/28-stores.yml`). Renaming it breaks convergence on every Pi until
 re-flash — which is why a file containing zero hosts is still called
 `28-stores.yml`.
 
+## Rule 3 — patching has two clocks, and both must be set
+
+`auto_apply_security_patches: true` (2026-07-27) makes unattended-upgrades
+actually INSTALL Debian security patches, not just download them. Two schedules
+have to agree or the policy is a fiction:
+
+- **When it upgrades** — Debian's `apt-daily-upgrade.timer` fires at 06:00
+  ±60 min out of the box. The security role ships a drop-in pinning it to the
+  maintenance-window start. Same OR-ing trap as Rule 2: clear `OnCalendar=`
+  first.
+- **When it reboots** — `Automatic-Reboot-Time` must be the window END. Set it
+  to the start (where the upgrade also begins) and the time has already passed
+  by the time the upgrade finishes, so a kernel patch waits for the next night.
+
+`tests/test_patch_window.sh` renders the real templates and asserts both. It
+was written after getting both wrong in one sitting; ansible reports green
+either way.
+
 ## How a Pi knows which store it is
 
 It doesn't, by default: every Pi converges as `hosts: localhost`, i.e. Ansible's

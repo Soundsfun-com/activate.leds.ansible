@@ -34,6 +34,9 @@ jobs:
       - name: Per-site config resolution (canary + pins + precedence)
         run: tests/test_site_identity.sh
 
+      - name: Security patch window renders correctly
+        run: tests/test_patch_window.sh
+
       - name: Pull cadence actually replaces the baked hourly repeat
         # The image's timer bakes OnUnitActiveSec=1h, and systemd ORs triggers.
         # A cadence drop-in that sets OnCalendar but leaves OnUnitActiveSec

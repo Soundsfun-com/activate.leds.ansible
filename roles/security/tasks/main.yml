@@ -60,6 +60,55 @@
     group: root
     mode: "0644"
 
+# --- 2b. run the upgrades inside the maintenance window ---------------------
+#
+# Turning `auto_apply_security_patches` on is NOT sufficient on its own.
+# Debian's apt-daily-upgrade.timer fires at 06:00 with up to 60 min of jitter,
+# so patches would install between 6 and 7am — during opening prep, not the
+# 3-5am window the policy above talks about. Worse, a patch needing a reboot
+# would leave the Pi waiting until the 03:00 reboot time the NEXT night.
+#
+# Same systemd trap as the ansible-pull timer (see roles/base): triggers are
+# OR-ed, so the baked OnCalendar must be CLEARED before setting ours or both
+# apply and the 06:00 run survives.
+
+- name: Ensure apt-daily-upgrade timer override directory exists
+  ansible.builtin.file:
+    path: /etc/systemd/system/apt-daily-upgrade.timer.d
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+  when: auto_apply_security_patches
+
+- name: Run unattended-upgrades inside the maintenance window
+  ansible.builtin.copy:
+    dest: /etc/systemd/system/apt-daily-upgrade.timer.d/activate-window.conf
+    owner: root
+    group: root
+    mode: "0644"
+    content: |
+      # Managed by Ansible (roles/security). Do not edit on the Pi.
+      [Timer]
+      OnCalendar=
+      OnCalendar=*-*-* {{ "%02d:00" | format(maintenance_window_start_hour | default(3)) }}
+      # Spread the fleet across the first half of the window so 28 stores don't
+      # all hit the Debian mirror in the same second.
+      RandomizedDelaySec={{ ((maintenance_window_end_hour | default(5)) - (maintenance_window_start_hour | default(3))) * 1800 }}
+      # Catch up a run missed while the Pi was powered off. An apt run outside
+      # the window is untidy; skipping security patches entirely is worse.
+      Persistent=true
+  when: auto_apply_security_patches
+  notify: reload-apt-timer
+
+- name: Ensure the apt upgrade timer is enabled
+  ansible.builtin.systemd:
+    name: apt-daily-upgrade.timer
+    enabled: yes
+    state: started
+    daemon_reload: yes
+  when: auto_apply_security_patches
+
 # --- 3. fail2ban (SSH brute-force protection) ------------------------------
 
 - name: Install fail2ban

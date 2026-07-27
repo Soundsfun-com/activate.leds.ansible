@@ -10,12 +10,19 @@ Unattended-Upgrade::Allowed-Origins {
 // Auto-fix interrupted dpkg runs (safe — only re-runs the existing operation).
 Unattended-Upgrade::AutoFixInterruptedDpkg "true";
 
-// Reboot automatically only inside the maintenance window AND only if security
-// patches required a reboot (e.g. kernel update).
+// Reboot automatically only inside the maintenance window AND only if a patch
+// actually required it (e.g. a kernel update).
+//
+// The reboot is pinned to the END of the window, not the start. The upgrade
+// run itself begins at the window START (see the apt-daily-upgrade.timer
+// drop-in in roles/security) with up to an hour of jitter — so a reboot time
+// of 03:00 would already be in the past by the time the upgrade finished, and
+// unattended-upgrades would wait until 03:00 the FOLLOWING night. A kernel
+// patch sitting unbooted for 24 hours is exactly the gap this is meant to close.
 {% if auto_apply_security_patches %}
 Unattended-Upgrade::Automatic-Reboot "true";
 Unattended-Upgrade::Automatic-Reboot-WithUsers "false";
-Unattended-Upgrade::Automatic-Reboot-Time "{{ "%02d:00" | format(maintenance_window_start_hour | default(3)) }}";
+Unattended-Upgrade::Automatic-Reboot-Time "{{ "%02d:00" | format(maintenance_window_end_hour | default(5)) }}";
 {% else %}
 // auto_apply_security_patches is false — patches are downloaded but NOT applied.
 // Run `unattended-upgrade -v` manually to apply, or flip the var via Ansible.

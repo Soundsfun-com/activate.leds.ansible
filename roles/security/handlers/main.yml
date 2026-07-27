@@ -8,3 +8,9 @@
   ansible.builtin.systemd:
     name: fail2ban
     state: restarted
+
+- name: reload-apt-timer
+  ansible.builtin.systemd:
+    name: apt-daily-upgrade.timer
+    daemon_reload: yes
+    state: restarted
