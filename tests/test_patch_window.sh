@@ -43,6 +43,8 @@ cat > "$TMP/render.yml" <<EOF
     auto_apply_security_patches: true
     maintenance_window_start_hour: $START
     maintenance_window_end_hour: $END
+    apt_upgrade_blacklist:
+      - "linux-image-.*"
   tasks:
     - name: unattended-upgrades policy
       ansible.builtin.template:
@@ -83,6 +85,28 @@ check "reboot is pinned to the window END ($END:00), not its start" $?
 
 grep -q "Automatic-Reboot-Time \"0$START:00\"" "$TMP/50unattended-upgrades" && rc=1 || rc=0
 check "reboot is NOT at the window start (would defer 24h)" $rc
+
+# 3b. The hold-list actually reaches the policy file, and an empty one doesn't
+#     emit a malformed stanza.
+grep -q '"linux-image-.\*";' "$TMP/50unattended-upgrades"
+check "apt_upgrade_blacklist entries reach Package-Blacklist" $?
+
+cat > "$TMP/render-empty.yml" <<EOF
+- hosts: localhost
+  connection: local
+  gather_facts: no
+  vars:
+    auto_apply_security_patches: true
+    maintenance_window_start_hour: $START
+    maintenance_window_end_hour: $END
+  tasks:
+    - ansible.builtin.template:
+        src: $REPO/roles/security/templates/50-unattended-upgrades-activate.j2
+        dest: $TMP/50unattended-empty
+EOF
+ansible-playbook "$TMP/render-empty.yml" >/dev/null
+grep -qz 'Package-Blacklist {\n};' "$TMP/50unattended-empty"
+check "an empty hold-list renders a valid empty stanza" $?
 
 # 4. The timer drop-in clears the baked OnCalendar before setting ours.
 #    Asserted against the role source: systemd ORs triggers, so a drop-in that

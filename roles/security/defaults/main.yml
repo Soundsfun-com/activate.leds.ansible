@@ -19,3 +19,11 @@ fail2ban_enabled: true
 # Field techs SSH in as activate-wled.
 ssh_allowed_users:
   - activate-wled
+
+# Packages never auto-upgraded, as regexes matched on the package name.
+# The escape hatch for "patch everything except this". Fleet-wide via
+# group_vars, or per-store via host_vars/<slug>.yml.
+#
+# Empty on purpose: anything listed here stops getting security fixes until
+# it's removed, so entries want a reason and a review date, not permanence.
+apt_upgrade_blacklist: []

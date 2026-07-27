@@ -7,6 +7,22 @@ Unattended-Upgrade::Allowed-Origins {
         "${distro_id}ESM:${distro_codename}-infra-security";
 };
 
+// Packages that must NEVER be auto-upgraded, even for a security fix.
+//
+// This is the control surface for "we want patches, but not THAT one". Entries
+// are regexes matched against the package name. Set `apt_upgrade_blacklist` in
+// group_vars for the whole fleet, or in host_vars/<slug>.yml to hold one store
+// back (the site-identity role layers it the same way it layers version pins).
+//
+// Empty by default, deliberately. A blacklisted package stops receiving
+// security fixes for as long as it's listed, so each entry should be a
+// decision with a reason and an end date — not a precaution left running.
+Unattended-Upgrade::Package-Blacklist {
+{% for pkg in apt_upgrade_blacklist | default([]) %}
+        "{{ pkg }}";
+{% endfor %}
+};
+
 // Auto-fix interrupted dpkg runs (safe — only re-runs the existing operation).
 Unattended-Upgrade::AutoFixInterruptedDpkg "true";
 
