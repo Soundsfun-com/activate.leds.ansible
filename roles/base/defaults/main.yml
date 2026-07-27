@@ -26,4 +26,11 @@ activate_log_max_size_mb: 50
 #   hourly       — image default (production)
 #   *:0/15       — every 15 minutes
 #   *:0/5        — every 5 minutes (heavy dev)
-ansible_pull_oncalendar: "hourly"
+# Convergence schedule. 2am in the Pi's own timezone (see site_timezone) —
+# config changes land overnight, not during trading hours. Fleet-wide pushes
+# that can't wait go through the Edge Pis page's "Update all agents" button.
+ansible_pull_oncalendar: "*-*-* 02:00:00"
+
+# Jitter after the scheduled time, so the fleet doesn't hit GitHub at once.
+# 2:00–2:30am local.
+ansible_pull_randomized_delay: "30min"

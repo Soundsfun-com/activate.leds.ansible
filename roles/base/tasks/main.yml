@@ -78,8 +78,14 @@
     mode: "0755"
 
 - name: Override ansible-pull timer cadence
-  # Empty OnCalendar= first clears the baked value so the second
-  # OnCalendar= replaces (rather than appends to) it.
+  # systemd ORs every trigger on a timer, and the image bakes
+  # OnBootSec=5min + OnUnitActiveSec=1h. Clearing OnCalendar alone would
+  # therefore leave the HOURLY repeat in place and the new schedule would
+  # look ignored — an empty `OnUnitActiveSec=` is what actually retires it.
+  #
+  # OnBootSec is deliberately KEPT: a Pi that was unplugged (or freshly
+  # flashed) converges ~5 min after it comes up instead of waiting for the
+  # next 2am.
   ansible.builtin.copy:
     dest: /etc/systemd/system/activate-ansible-pull.timer.d/cadence.conf
     owner: root
@@ -87,12 +93,20 @@
     mode: "0644"
     content: |
       # Managed by activate.leds.ansible / roles/base.
-      # Default: hourly. Bump to *:0/15 or *:0/5 during heavy dev (set
-      # `ansible_pull_oncalendar` in group_vars/all.yml). Revert when
-      # active dev settles.
+      #
+      # Cadence comes from `ansible_pull_oncalendar` in
+      # inventory/group_vars/all.yml. Default is 02:00 daily, in the Pi's OWN
+      # timezone (`site_timezone`) — so each store converges at 2am local,
+      # while the building is empty. Push something urgent with the "Update
+      # all agents" button on the Edge Pis page rather than speeding this up.
       [Timer]
+      OnUnitActiveSec=
       OnCalendar=
       OnCalendar={{ ansible_pull_oncalendar }}
+      # Spread the fleet so 28 stores don't hit GitHub on the same second.
+      RandomizedDelaySec={{ ansible_pull_randomized_delay }}
+      # Ran while the Pi was off? Converge at next boot instead of skipping.
+      Persistent=true
   notify: reload-ansible-pull-timer
 
 - name: Render MOTD with build + ansible-pull info

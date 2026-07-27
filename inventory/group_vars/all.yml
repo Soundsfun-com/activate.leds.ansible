@@ -5,4 +5,4 @@ cloudflared_version: 2026.7.3
 auto_apply_security_patches: false
 maintenance_window_start_hour: 3
 maintenance_window_end_hour: 5
-ansible_pull_oncalendar: '*:0/15'
+ansible_pull_oncalendar: '*-*-* 02:00:00'

@@ -34,6 +34,17 @@ jobs:
       - name: Per-site config resolution (canary + pins + precedence)
         run: tests/test_site_identity.sh
 
+      - name: Pull cadence actually replaces the baked hourly repeat
+        # The image's timer bakes OnUnitActiveSec=1h, and systemd ORs triggers.
+        # A cadence drop-in that sets OnCalendar but leaves OnUnitActiveSec
+        # alone keeps firing hourly — the new schedule silently does nothing.
+        run: |
+          conf=roles/base/tasks/main.yml
+          grep -q 'OnUnitActiveSec=$' "$conf" \
+            || { echo "::error::cadence.conf must emit an empty OnUnitActiveSec= to retire the image's hourly repeat, or the schedule is ignored"; exit 1; }
+          grep -q 'OnCalendar=$' "$conf" \
+            || { echo "::error::cadence.conf must clear OnCalendar before setting it, or values append"; exit 1; }
+
       - name: Inventory vars live next to the inventory
         # The failure that started all this: group_vars at the repo root, where
         # Ansible never looks. Cheap to assert, impossible to notice by hand.
