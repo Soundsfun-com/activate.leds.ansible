@@ -71,6 +71,34 @@ Per-site pins and canary rollout depend entirely on it. Don't reorder it.
 `site_timezone` (which decides when 2am is) defaults to `America/New_York` for
 every Pi — a store outside Eastern needs it set in its `host_vars/<slug>.yml`.
 
+## Fleet default is pinned, Warehouse tracks main
+
+Until 2026-07-28, `all.yml` pinned `activate_agent_ref: main` — meaning every
+merge to the agent repo's main branch was already a fleet-wide deploy to all
+28 stores within the hour, whether or not anyone meant to ship it yet.
+
+`all.yml` now pins an explicit SHA (today's value is just main's HEAD at the
+moment of the cutover — a freeze, not a deliberate version choice; nothing
+changed for the other 27 stores. Future bumps here ARE deliberate promotions).
+`host_vars/warehouse.yml` pins `activate_agent_ref: main`, which
+outranks the fleet default per the precedence above. Net effect: pushing to the
+agent repo's main now reaches Warehouse (the real-hardware test rig) within the
+hour, and reaches everywhere else only when someone edits `all.yml`'s pin —
+by hand, or via the dashboard's Firmware console "promote to fleet" action.
+
+Testing an agent change: push to the agent repo's main, wait for Warehouse's
+next `ansible-pull`, confirm on the Pi at
+`/var/lib/activate-wled/agent-checkout.json` (or the dashboard's
+`/api/trpc/locations.getAgentSystem?input={"json":{"slug":"warehouse"}}`).
+Promoting to the fleet: bump the SHA in `all.yml`.
+
+Warehouse's pin was set by committing `host_vars/warehouse.yml` directly, not
+via the dashboard's `pinSite` — so there's no matching `location_version_pins`
+row, and the Firmware console's Edge Devices matrix will show Warehouse's
+`agent` component as unpinned even though the file pin is live. Re-pin once
+from that UI (value `main`, ≤32 chars so a full SHA won't fit — branch/tag
+names and short SHAs do) if you want the two to agree.
+
 ## Verifying
 
     tests/test_site_identity.sh          # needs: pip install ansible-core

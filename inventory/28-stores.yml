@@ -9,20 +9,22 @@
 # WHAT THIS FILE ACTUALLY DOES: almost nothing except anchor the location of
 # group_vars/ and host_vars/. `playbooks/site.yml` targets `hosts: localhost`
 # (each Pi converges ITSELF via ansible-pull), so the play runs against Ansible's
-# IMPLICIT localhost. Verified 2026-07-26 against ansible-core 2.15:
-#   * group_vars/all.yml DOES apply to implicit localhost, despite the
-#     "implicit localhost does not match 'all'" warning. Fleet-wide pins work.
-#   * host_vars/<slug>.yml does NOT. The running host is `localhost`, not
-#     `activate-<slug>`, so per-site pins written by the dashboard's
-#     firmware.pinSite are committed and then never read by anything.
+# IMPLICIT localhost, which matches no inventory host and belongs to no group —
+# group_vars/all.yml is the only vars file Ansible itself ever hands it.
 #
-# So per-site pinning is not "rarely used" — it is non-functional. Making it work
-# needs the play to learn its own site slug (agent.toml has `site_slug`) and
-# include_vars that file explicitly; that's a design change, not a config tweak.
+# UPDATE 2026-07-28: per-site pins and canary ARE live, as of the
+# `site-identity` role (commit 3cbe924, the day after the paragraph above was
+# first written — this file just never got corrected). That role reads
+# `site_slug` out of agent.toml and hand-includes canary.yml / host_vars/
+# <slug>.yml itself, working around the implicit-localhost limitation rather
+# than needing Ansible's native inventory matching. See ansible/CLAUDE.md
+# ("How a Pi knows which store it is") for the precedence order. Per-site
+# pins written by the dashboard's firmware.pinSite DO get read now.
 #
-# The groups below are likewise inert: the earlier plan was for the dashboard's
-# Add Location flow to append host entries here, and no code was ever written to
-# do it. They're kept because group_vars/canary.yml references the canary group.
+# The groups below remain inert: the earlier plan was for the dashboard's
+# Add Location flow to append host entries here, and no code was ever written
+# to do it. Left in place only because group_vars/canary.yml's name references
+# the canary group — site-identity doesn't need it to exist.
 
 all:
   children:

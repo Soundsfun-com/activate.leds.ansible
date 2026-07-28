@@ -1,0 +1,9 @@
+# Warehouse is the real-hardware test rig — this pin is what lets agent
+# development land there alone instead of on all 28 stores. See "Fleet default
+# is pinned, Warehouse tracks main" in ansible/CLAUDE.md for the full story.
+#
+# The dashboard's Firmware console can also write this file (pinSite /
+# unpinSite on Warehouse's "agent" component) — if that's ever used here,
+# this comment won't survive the round-trip. The `activate_agent_ref: main`
+# value is what matters; re-add the comment if it goes missing.
+activate_agent_ref: main
