@@ -1,0 +1,31 @@
+# Managed by activate.leds.ansible / roles/base.
+#
+# This Pi is {{ 'CLAIMED (' ~ site_slug ~ ')' if activate_pi_claimed | bool else 'UNCLAIMED' }},
+# so the cadence below comes from
+# `{{ 'ansible_pull_oncalendar' if activate_pi_claimed | bool else 'ansible_pull_unassigned_oncalendar' }}`.
+#
+# Claimed  : 02:00 daily in the Pi's OWN timezone (`site_timezone`) — each store
+#            converges while the building is empty. Push something urgent with
+#            "Update all agents" on the Edge Pis page rather than speeding this
+#            up.
+# Unclaimed: every few minutes, because until a pull installs the agent this Pi
+#            is invisible to the dashboard and cannot be assigned. It flips to
+#            the store cadence on the first pull after it is claimed.
+#
+# systemd ORs every trigger on a timer, and the image bakes OnBootSec=5min +
+# OnUnitActiveSec=1h. Clearing OnCalendar alone would leave the HOURLY repeat in
+# place and this schedule would look ignored — the empty `OnUnitActiveSec=` is
+# what actually retires it. Cleared in BOTH branches: it is redundant against
+# the fast cadence, but branches that differ in ways nobody remembers are how
+# that trap bites a second time.
+#
+# OnBootSec is deliberately NOT cleared: a Pi that was unplugged (or freshly
+# flashed) converges ~5 min after it comes up instead of waiting for 2am.
+[Timer]
+OnUnitActiveSec=
+OnCalendar=
+OnCalendar={{ ansible_pull_effective_oncalendar }}
+# Spread the fleet so 28 stores don't hit GitHub on the same second.
+RandomizedDelaySec={{ ansible_pull_effective_delay }}
+# Ran while the Pi was off? Converge at next boot instead of skipping.
+Persistent=true

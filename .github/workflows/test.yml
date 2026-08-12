@@ -37,16 +37,21 @@ jobs:
       - name: Security patch window renders correctly
         run: tests/test_patch_window.sh
 
-      - name: Pull cadence actually replaces the baked hourly repeat
-        # The image's timer bakes OnUnitActiveSec=1h, and systemd ORs triggers.
-        # A cadence drop-in that sets OnCalendar but leaves OnUnitActiveSec
-        # alone keeps firing hourly — the new schedule silently does nothing.
-        run: |
-          conf=roles/base/tasks/main.yml
-          grep -q 'OnUnitActiveSec=$' "$conf" \
-            || { echo "::error::cadence.conf must emit an empty OnUnitActiveSec= to retire the image's hourly repeat, or the schedule is ignored"; exit 1; }
-          grep -q 'OnCalendar=$' "$conf" \
-            || { echo "::error::cadence.conf must clear OnCalendar before setting it, or values append"; exit 1; }
+      - name: Per-store Pi hostname resolves (ACT-LED-Pi-<Store>)
+        # Also rejects a pattern containing anything but letters, digits and
+        # hyphens. A space or bracket is not a style question: hostnamectl
+        # refuses it, which aborts `base` — 2nd in site.yml — before the agent
+        # and cloudflared converge, leaving a Pi that runs but stops updating.
+        run: tests/test_hostname.sh
+
+      - name: Pull cadence — unclaimed Pis converge fast, stores stay at 2am
+        # Replaces an inline grep of roles/base/tasks/main.yml. That grep proved
+        # the baked OnUnitActiveSec=1h gets retired (systemd ORs triggers), but
+        # it could only see the ONE cadence that used to be written. Now that the
+        # cadence branches on whether the Pi is claimed, the assertion has to
+        # render both branches — which is what the test script does, along with
+        # the OnUnitActiveSec/OnCalendar clearing it replaces.
+        run: tests/test_pull_cadence.sh
 
       - name: Inventory vars live next to the inventory
         # The failure that started all this: group_vars at the repo root, where

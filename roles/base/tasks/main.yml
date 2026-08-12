@@ -2,10 +2,11 @@
 # base role — OS-level baseline that every Pi (site or flasher) should converge to.
 # Idempotent: re-runs are no-ops if state already matches.
 
-- name: Set system hostname (only when desired_hostname is explicitly set)
-  # Bench Pis keep whatever Pi Imager set. Production Pis define
-  # `desired_hostname` in their host_vars file during enrollment (e.g.
-  # host_vars/activate-alpharetta.yml → desired_hostname: activate-alpharetta).
+- name: Resolve the hostname this Pi should have
+  ansible.builtin.import_tasks: resolve-hostname.yml
+
+- name: Set system hostname (only when desired_hostname is set or derived)
+  # Bench Pis and unclaimed Pis keep whatever the image / Pi Imager set.
   # NEVER fall back to inventory_hostname — under `hosts: localhost` that's
   # literally "localhost" which would brick mDNS.
   ansible.builtin.hostname:
@@ -77,36 +78,47 @@
     group: root
     mode: "0755"
 
-- name: Override ansible-pull timer cadence
-  # systemd ORs every trigger on a timer, and the image bakes
-  # OnBootSec=5min + OnUnitActiveSec=1h. Clearing OnCalendar alone would
-  # therefore leave the HOURLY repeat in place and the new schedule would
-  # look ignored — an empty `OnUnitActiveSec=` is what actually retires it.
+- name: Decide this Pi's convergence cadence (unclaimed converges fast)
+  # An UNCLAIMED Pi cannot appear on the dashboard's Assign tab until a pull
+  # has installed and started the agent — the pi-gen image ships only the venv,
+  # not the agent code (see infra/pi-image/stage3-activate/02-agent-venv). So
+  # for an unclaimed Pi the convergence cadence IS the time-to-appear, and a
+  # once-a-day schedule means an installer stands there waiting until 2am.
   #
-  # OnBootSec is deliberately KEPT: a Pi that was unplugged (or freshly
-  # flashed) converges ~5 min after it comes up instead of waiting for the
-  # next 2am.
-  ansible.builtin.copy:
+  # It also defuses an ordering latch: `base` runs BEFORE `activate-agent` in
+  # site.yml, so on a fresh Pi this drop-in lands before the agent exists. When
+  # the store cadence was written unconditionally, ANY failure at-or-after this
+  # point (bad clone, pip, cloudflared) retired the image's hourly retry and
+  # left the Pi silent until 2am — invisible, because a Pi with no agent can't
+  # report anything. Writing the fast cadence while unclaimed makes that
+  # self-heal within ~10 min instead.
+  #
+  # Claimed Pis keep the quiet 2am schedule: they are running the lights, and
+  # same-day pushes go through the Edge Pis page's "Update all agents" button.
+  #
+  # `site_slug` is resolved by the site-identity role (first in site.yml) from
+  # /etc/activate-wled/agent.toml. Deliberately the SAME expression the canary
+  # and per-site-pin tasks use — two different tests of "am I claimed" that can
+  # disagree is the exact seam class this repo keeps getting bitten by.
+  ansible.builtin.set_fact:
+    activate_pi_claimed: "{{ site_slug | default('') | length > 0 }}"
+    ansible_pull_effective_oncalendar: >-
+      {{ ansible_pull_oncalendar if (site_slug | default('') | length > 0)
+         else ansible_pull_unassigned_oncalendar }}
+    ansible_pull_effective_delay: >-
+      {{ ansible_pull_randomized_delay if (site_slug | default('') | length > 0)
+         else ansible_pull_unassigned_randomized_delay }}
+
+- name: Override ansible-pull timer cadence
+  # A TEMPLATE rather than inline content so tests/test_pull_cadence.sh can
+  # render the real thing for both branches. The systemd OR-ing trap and the
+  # reasoning for each branch live in the template's own header.
+  ansible.builtin.template:
+    src: ansible-pull-cadence.conf.j2
     dest: /etc/systemd/system/activate-ansible-pull.timer.d/cadence.conf
     owner: root
     group: root
     mode: "0644"
-    content: |
-      # Managed by activate.leds.ansible / roles/base.
-      #
-      # Cadence comes from `ansible_pull_oncalendar` in
-      # inventory/group_vars/all.yml. Default is 02:00 daily, in the Pi's OWN
-      # timezone (`site_timezone`) — so each store converges at 2am local,
-      # while the building is empty. Push something urgent with the "Update
-      # all agents" button on the Edge Pis page rather than speeding this up.
-      [Timer]
-      OnUnitActiveSec=
-      OnCalendar=
-      OnCalendar={{ ansible_pull_oncalendar }}
-      # Spread the fleet so 28 stores don't hit GitHub on the same second.
-      RandomizedDelaySec={{ ansible_pull_randomized_delay }}
-      # Ran while the Pi was off? Converge at next boot instead of skipping.
-      Persistent=true
   notify: reload-ansible-pull-timer
 
 - name: Render MOTD with build + ansible-pull info
@@ -124,7 +136,7 @@
       │  Agent mode:     {{ agent_mode | default('site') }}
       │  Timezone:       {{ site_timezone }}
       │  Last ansible:   {{ ansible_date_time.iso8601 }}
-      │  ansible-pull:   {{ ansible_pull_oncalendar }} (public ansible repo)
+      │  ansible-pull:   {{ ansible_pull_effective_oncalendar }} ({{ 'store cadence' if activate_pi_claimed | bool else 'UNCLAIMED — fast, waiting to be assigned' }})
       └──────────────────────────────────────────────────────────────┘
       Don't edit files in /opt/activate-wled-agent/ or /etc/cloudflared/
       directly — Ansible will overwrite them on the next pull.

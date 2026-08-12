@@ -1,0 +1,40 @@
+---
+# Work out what this Pi SHOULD be called. Pure computation — sets facts and
+# touches nothing on the box.
+#
+# Split out of main.yml on purpose: applying the name needs root and systemd,
+# but deciding it doesn't, so tests/test_hostname.sh can import this file and
+# assert the resolved value on a laptop without renaming the laptop.
+
+- name: Build the display form of this store's slug
+  # Slugs are stored lowercase and hyphenated (`american-dream`); the hostname
+  # shows the store the way people write it (`American-Dream`), so this
+  # title-cases each hyphen-separated word. Hyphens stay — they're the only
+  # separator a hostname can safely carry (no spaces, no underscores).
+  #
+  #   alpharetta      → Alpharetta
+  #   american-dream  → American-Dream
+  ansible.builtin.set_fact:
+    site_hostname_slug: >-
+      {{ site_slug | replace('-', ' ') | title | replace(' ', '-') }}
+  when: site_slug | default('') | length > 0
+
+- name: Derive the site hostname from the store slug
+  # Every claimed Pi should be findable on its store's network as
+  # ACT-LED-Pi-<Store>. site-identity (which runs before this role)
+  # resolved `site_slug` from agent.toml, so we can build the name here
+  # instead of hand-writing `desired_hostname` into every host_vars file.
+  #
+  # `activate_hostname_pattern` itself contains `{{ site_hostname_slug }}`;
+  # Ansible templates recursively, so assigning it here resolves both levels.
+  #
+  # Precedence: an explicit `desired_hostname` in host_vars/<slug>.yml wins.
+  # Otherwise render the pattern — but only if BOTH the pattern is enabled
+  # (non-empty) and this Pi is claimed (has a slug). An unclaimed Pi has no
+  # store to be named after, so it keeps the image's name.
+  ansible.builtin.set_fact:
+    desired_hostname: "{{ activate_hostname_pattern }}"
+  when:
+    - desired_hostname is not defined
+    - activate_hostname_pattern | default('') | length > 0
+    - site_hostname_slug | default('') | length > 0

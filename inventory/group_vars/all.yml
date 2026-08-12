@@ -1,5 +1,6 @@
 inventory_vars_loaded: true
-canary_sites: []
+canary_sites:
+  - warehouse
 activate_agent_ref: 4e9b9db9dbd2bdbc07dfe625342d88a29830cc98
 cloudflared_version: 2026.7.3
 auto_apply_security_patches: true

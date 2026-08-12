@@ -6,8 +6,32 @@
 # Override per-site in host_vars/<slug>.yml when a store is in another zone.
 site_timezone: America/New_York
 
-# Hostname pattern: each host's inventory_hostname IS the hostname.
-# (We set hostname = inventory_hostname unconditionally in tasks.)
+# Hostname pattern for site Pis. Rendered with the store's `site_slug` (which
+# site-identity reads out of agent.toml — that role runs FIRST in site.yml, so
+# the slug is always resolved by the time this role runs).
+#
+#   ACT-LED-Pi-{{ site_hostname_slug }}  →  ACT-LED-Pi-Alpharetta
+#
+# resolve-hostname.yml builds `site_hostname_slug` by title-casing the slug
+# (`american-dream` → `American-Dream`) so the store reads the way people
+# write it.
+#
+# ⚠️ HYPHENS ONLY. The requested form was "ACT-LED Pi-[Alpharetta]"; the space
+# and the brackets are NOT legal in a hostname and a space would be rejected
+# outright — see the abort risk in ansible/CLAUDE.md. Letters, digits and
+# hyphens are the safe set: no spaces, no brackets, no underscores (underscores
+# are legal for systemd but some routers mangle them in the DHCP client list,
+# which is the one screen this naming exists to improve). Keep any future
+# rewording inside that set.
+#
+# EMPTY = disabled: an empty pattern means this role never touches the
+# hostname, which is the pre-rollout state. Turn it on per-site via
+# group_vars/canary.yml first, then promote to group_vars/all.yml once the
+# canary has soaked. See ansible/CLAUDE.md.
+#
+# An explicit `desired_hostname` in host_vars/<slug>.yml still wins over the
+# pattern, so one store can be named by hand without disabling this fleet-wide.
+activate_hostname_pattern: ""
 
 # Logrotate policy for /var/log/activate-wled/
 activate_log_rotate_days: 14
@@ -34,3 +58,32 @@ ansible_pull_oncalendar: "*-*-* 02:00:00"
 # Jitter after the scheduled time, so the fleet doesn't hit GitHub at once.
 # 2:00–2:30am local.
 ansible_pull_randomized_delay: "30min"
+
+# ── Cadence for a Pi that is NOT yet claimed by a store ─────────────────────
+#
+# Why unclaimed Pis get their own, much faster schedule:
+#
+# The pi-gen image does NOT bake the agent code — only its virtualenv. The agent
+# arrives with the first ansible-pull, and nothing announces the Pi to the
+# dashboard's Assign tab until that agent is running. So on a fresh Pi the
+# convergence cadence literally IS the time-to-appear: at the store cadence an
+# installer flashes a box and then waits for 2am.
+#
+# It also bounds a failure that used to be silent. `base` runs before
+# `activate-agent`, so this drop-in is written before the agent exists; when it
+# unconditionally wrote the daily schedule, any failure later in the play left
+# a Pi with no agent AND no retry until 2am — and a Pi with no agent cannot tell
+# anyone. Now it retries within minutes and heals itself.
+#
+# The cost is bounded: only unclaimed Pis poll this often (usually a handful on
+# a bench, not the 28-store fleet), and the moment one is claimed its next pull
+# writes the store cadence instead.
+#
+# NOTE for re-assignment: unassigning a Pi from the dashboard makes the agent
+# self-unenroll (deletes agent.toml), but the timer only flips back to fast on
+# its NEXT pull — which is still the store cadence. If you need a re-flashed or
+# unassigned Pi back on the Assign tab now, run
+# `systemctl start activate-ansible-pull.service` on it (or reboot: OnBootSec
+# survives every drop-in).
+ansible_pull_unassigned_oncalendar: "*:0/10"
+ansible_pull_unassigned_randomized_delay: "1min"

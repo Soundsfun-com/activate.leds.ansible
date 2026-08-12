@@ -7,3 +7,19 @@
 #   4. If healthy: copy the var from canary.yml into all.yml, then commit
 #      (empties canary.yml of that var). Whole fleet converges within ~1h.
 #   5. If broken: git revert. Canary returns to all.yml's value within ~1h.
+
+# ── Per-store Pi hostnames (staged 2026-08-12) ───────────────────────────────
+# Renames each claimed Pi to ACT-LED-Pi-<Store> so it's identifiable in a
+# store's router client list and over mDNS (ACT-LED-Pi-Alpharetta.local)
+# instead of every Pi in the fleet answering to activate-led-controller-pi.
+#
+# Hyphens only — the requested "ACT-LED Pi-[Alpharetta]" can't be used
+# literally; a space is invalid in a hostname. See roles/base/defaults/main.yml.
+#
+# The role default is "" (disabled), so ONLY canary sites rename until this
+# line is copied into all.yml. Soaking on canary first because `base` runs 2nd
+# in site.yml — if hostnamectl rejects this name, the play aborts before
+# activate-agent and cloudflared converge, and the Pi silently stops updating.
+# Verify on Warehouse before promoting:
+#   hostnamectl set-hostname ACT-LED-Pi-Warehouse && hostnamectl status
+activate_hostname_pattern: "ACT-LED-Pi-{{ site_hostname_slug }}"

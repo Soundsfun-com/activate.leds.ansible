@@ -1,9 +1,11 @@
 # Activate fleet config — working notes
 
-What version of what runs on each store's Raspberry Pi. Every Pi runs
+What version of what runs on each store's Raspberry Pi. A **claimed** Pi runs
 `ansible-pull` against this repo at **02:00 local, once a day** (plus ~5 min
-after boot). Same-day pushes go through the dashboard's "Update all agents"
-button.
+after boot). An **unclaimed** Pi — flashed but not yet assigned to a store —
+runs it **every ~10 min**, because until a pull installs the agent it can't
+appear on the dashboard's Assign tab at all (see Rule 4). Same-day pushes to
+claimed stores go through the dashboard's "Update all agents" button.
 
 This repo is small and boring on purpose, and it has produced three
 production-affecting bugs in a week — every one of them by **doing nothing
@@ -55,6 +57,46 @@ have to agree or the policy is a fiction:
 was written after getting both wrong in one sitting; ansible reports green
 either way.
 
+## Rule 4 — an unclaimed Pi's cadence IS its time-to-appear
+
+The Pi image bakes the agent's virtualenv but **not the agent code** — that
+arrives with the first `ansible-pull`. Nothing announces a Pi to the dashboard's
+Assign tab until that agent is running, so on a fresh Pi "how often do we
+converge" and "how long before an installer can assign this box" are the same
+number.
+
+That's why `roles/base` branches the cadence on claimed-ness (reusing
+site-identity's `site_slug | default('') | length > 0`, so there is exactly one
+test of it in the repo):
+
+| | cadence | why |
+|---|---|---|
+| unclaimed | `ansible_pull_unassigned_oncalendar` — every ~10 min | it's invisible until a pull lands |
+| claimed | `ansible_pull_oncalendar` — 02:00 local | it's running the lights; converge while the store is empty |
+
+Two things this also defuses, both of which were silent:
+
+- **The ordering latch.** `base` runs *before* `activate-agent`, so the drop-in
+  is written before the agent exists. When it unconditionally wrote the daily
+  schedule, any failure at-or-after `base` retired the image's retry and left a
+  Pi with no agent and no next attempt until 2am — and a Pi with no agent can't
+  report anything. On the fast cadence it retries within ~10 min and heals.
+- **The baked jitter.** The image's timer used to carry
+  `RandomizedDelaySec=55min`, justified as "spread the 28-store fleet" — a
+  rationale that never applied, since claimed Pis are governed by the drop-in,
+  not that file. All it actually spread was unclaimed Pis, at random, across an
+  hour. Now 90s + 60s jitter. **Keep the baked timer at least as fast as
+  `ansible_pull_unassigned_oncalendar`** — it lives in the dashboard repo
+  (`infra/pi-image/stage3-activate/03-ansible-pull/files/`) and only reaches a
+  Pi on re-flash.
+
+`tests/test_pull_cadence.sh` renders both branches and asserts them (plus the
+Rule 2 clearing). Re-assignment caveat: unassigning a Pi makes the agent
+self-unenroll, but the timer only flips back to fast on its *next* pull — which
+is still the store cadence. To get such a Pi back on the Assign tab now:
+`systemctl start activate-ansible-pull.service` (or reboot — `OnBootSec`
+survives every drop-in).
+
 ## How a Pi knows which store it is
 
 It doesn't, by default: every Pi converges as `hosts: localhost`, i.e. Ansible's
@@ -70,6 +112,42 @@ Per-site pins and canary rollout depend entirely on it. Don't reorder it.
 
 `site_timezone` (which decides when 2am is) defaults to `America/New_York` for
 every Pi — a store outside Eastern needs it set in its `host_vars/<slug>.yml`.
+
+## Pi hostnames: ACT-LED-Pi-<Store>
+
+A freshly-flashed Pi is `ACT-LED-Pi-Unclaimed` (baked by the image — set in TWO
+places that must agree: `dashboard/infra/pi-image/config` → `TARGET_HOSTNAME`
+and `.github/workflows/build-pi-image.yml` → `hostname:`). Once enrollment
+writes a `site_slug`, the `base` role renames it to `ACT-LED-Pi-<Store>` — so a
+Pi still called "Unclaimed" is one nobody has assigned yet, and every other Pi
+is identifiable in its store's router client list and over mDNS
+(`ACT-LED-Pi-Alpharetta.local`).
+
+Controlled by `activate_hostname_pattern`. The role default is `""`, which
+means **do nothing** — that's both the pre-rollout state and the revert path.
+`resolve-hostname.yml` title-cases the slug (`american-dream` →
+`American-Dream`) so the store reads the way people write it. An explicit
+`desired_hostname` in `host_vars/<slug>.yml` still outranks the pattern.
+
+**Hyphens only — this is a correctness rule, not a style one.** The name was
+requested as `ACT-LED Pi-[Alpharetta]`; the space and brackets are invalid in a
+hostname and `hostnamectl` refuses them. Underscores are legal but some routers
+mangle them in the DHCP client list, which is the one screen this naming exists
+to improve. Letters, digits and hyphens is the safe set, and
+`tests/test_hostname.sh` fails the build on anything else.
+
+**Staged on purpose.** The pattern currently lives in `canary.yml` with
+`canary_sites: [warehouse]`, NOT in `all.yml`. Reason: `base` runs 2nd in
+`site.yml`, so if `hostnamectl` rejects a name the play aborts before
+`activate-agent` and `cloudflared` converge — the Pi keeps running but stops
+updating, with no signal. Fleet-wide, unattended, at 2am. Before promoting the
+line into `all.yml`, confirm on Warehouse:
+
+    hostnamectl set-hostname ACT-LED-Pi-Warehouse && hostnamectl status
+
+Nothing else in the fleet reads the system hostname: Pi registration keys on
+the hardware serial, and Cloudflare tunnel/DNS names come from the location
+slug in the DB. Renaming is safe; the only risk is the rename itself failing.
 
 ## Fleet default is pinned, Warehouse tracks main
 
@@ -102,6 +180,9 @@ names and short SHAs do) if you want the two to agree.
 ## Verifying
 
     tests/test_site_identity.sh          # needs: pip install ansible-core
+    tests/test_hostname.sh
+    tests/test_pull_cadence.sh
+    tests/test_patch_window.sh
     ansible-playbook --syntax-check playbooks/site.yml
 
 CI runs both plus the guards above. `inventory/group_vars/all.yml` is
