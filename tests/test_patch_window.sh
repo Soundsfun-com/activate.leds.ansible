@@ -68,28 +68,40 @@ check() {  # check <description> <condition-result>
   fi
 }
 
+# Run an assertion so a FAILING one reports instead of killing the script.
+#
+# `set -e` is on, so a bare `grep -q ...` followed by `check "..." $?` never
+# reaches `check` when the grep fails — bash aborts at the grep. The run then
+# ends with a naked "exit code 1" and no FAIL line, which is how a broken
+# assertion in this file sat unnoticed in CI from 2026-07-27 to 2026-08-12:
+# five oks, then nothing. Every assertion goes through this.
+assert() {  # assert <description> <command...>
+  local desc="$1"; shift
+  if "$@"; then check "$desc" 0; else check "$desc" 1; fi
+}
+
 echo "patch window:"
 
 # 1. Patches are actually applied, not just downloaded.
-grep -q 'APT::Periodic::Unattended-Upgrade "1"' "$TMP/20auto-upgrades"
-check "unattended-upgrade is enabled when auto_apply is on" $?
+assert "unattended-upgrade is enabled when auto_apply is on" \
+  grep -q 'APT::Periodic::Unattended-Upgrade "1"' "$TMP/20auto-upgrades"
 
 # 2. Security origins only — never a blanket dist-upgrade on a live store.
-grep -q 'security' "$TMP/50unattended-upgrades"
-check "only security origins are allowed" $?
+assert "only security origins are allowed" \
+  grep -q 'security' "$TMP/50unattended-upgrades"
 
 # 3. Reboot happens at the window END, AFTER the upgrade run that starts at
 #    the window start. This is the 24-hour-delay bug.
-grep -q "Automatic-Reboot-Time \"0$END:00\"" "$TMP/50unattended-upgrades"
-check "reboot is pinned to the window END ($END:00), not its start" $?
+assert "reboot is pinned to the window END ($END:00), not its start" \
+  grep -q "Automatic-Reboot-Time \"0$END:00\"" "$TMP/50unattended-upgrades"
 
 grep -q "Automatic-Reboot-Time \"0$START:00\"" "$TMP/50unattended-upgrades" && rc=1 || rc=0
 check "reboot is NOT at the window start (would defer 24h)" $rc
 
 # 3b. The hold-list actually reaches the policy file, and an empty one doesn't
 #     emit a malformed stanza.
-grep -q '"linux-image-.\*";' "$TMP/50unattended-upgrades"
-check "apt_upgrade_blacklist entries reach Package-Blacklist" $?
+assert "apt_upgrade_blacklist entries reach Package-Blacklist" \
+  grep -q '"linux-image-.\*";' "$TMP/50unattended-upgrades"
 
 cat > "$TMP/render-empty.yml" <<EOF
 - hosts: localhost
@@ -105,22 +117,38 @@ cat > "$TMP/render-empty.yml" <<EOF
         dest: $TMP/50unattended-empty
 EOF
 ansible-playbook "$TMP/render-empty.yml" >/dev/null
-grep -qz 'Package-Blacklist {\n};' "$TMP/50unattended-empty"
-check "an empty hold-list renders a valid empty stanza" $?
+
+# "Empty stanza" = the line after the opening brace IS the closing brace.
+#
+# Asserted line-by-line rather than as one multi-line match, because the
+# multi-line form is not portable and silently inverted this test's meaning:
+# `grep -qz 'Package-Blacklist {\n};'` matches on BSD grep (macOS, where this
+# was written and passed) and NEVER matches on GNU grep 3.11 (the CI runner
+# AND the Pis), which reads `\n` as a literal `n`. It failed in CI from the day
+# it was added. Keep any future assertion here single-line.
+empty_stanza() {
+  grep -A1 '^Unattended-Upgrade::Package-Blacklist {$' "$TMP/50unattended-empty" \
+    | grep -q '^};$'
+}
+assert "an empty hold-list renders a valid empty stanza" empty_stanza
 
 # 4. The timer drop-in clears the baked OnCalendar before setting ours.
 #    Asserted against the role source: systemd ORs triggers, so a drop-in that
 #    only adds one leaves Debian's 06:00 run alive.
 task_file="$REPO/roles/security/tasks/main.yml"
-grep -q 'apt-daily-upgrade.timer.d' "$task_file"
-check "an apt-daily-upgrade.timer drop-in is installed" $?
+assert "an apt-daily-upgrade.timer drop-in is installed" \
+  grep -q 'apt-daily-upgrade.timer.d' "$task_file"
 
-awk '/apt-daily-upgrade.timer.d\/activate-window.conf/,/notify:/' "$task_file" \
-  | grep -qE '^\s*OnCalendar=\s*$'
-check "the drop-in CLEARS OnCalendar before setting it" $?
+dropin_clears_oncalendar() {
+  awk '/apt-daily-upgrade.timer.d\/activate-window.conf/,/notify:/' "$task_file" \
+    | grep -qE '^[[:space:]]*OnCalendar=[[:space:]]*$'
+}
+assert "the drop-in CLEARS OnCalendar before setting it" dropin_clears_oncalendar
 
-awk '/apt-daily-upgrade.timer.d\/activate-window.conf/,/notify:/' "$task_file" \
-  | grep -q "maintenance_window_start_hour"
-check "the drop-in runs at the window start" $?
+dropin_uses_window_start() {
+  awk '/apt-daily-upgrade.timer.d\/activate-window.conf/,/notify:/' "$task_file" \
+    | grep -q "maintenance_window_start_hour"
+}
+assert "the drop-in runs at the window start" dropin_uses_window_start
 
 exit $fail

@@ -82,10 +82,16 @@ EOF
 
 run_case() {  # run_case <slug> <pattern> [extra -e args...]
   local slug="$1" pattern="$2"; shift 2
+  # `|| true` matters: under `set -euo pipefail` a grep that matches nothing
+  # fails the pipeline, which fails the `got="$(run_case ...)"` assignment,
+  # which aborts the whole script with no output. An unmatched probe then looks
+  # like a crash instead of a failing assertion. Let it return empty and let
+  # `check` report it. (This is the trap that hid the broken assertion in
+  # tests/test_patch_window.sh from CI for two weeks.)
   ( cd "$TMP" && ansible-playbook playbooks/probe.yml \
       -e "site_slug=$slug" \
       -e "activate_hostname_pattern=$pattern" \
-      "$@" 2>&1 ) | grep -o 'RESOLVED name=\[[^]]*\]'
+      "$@" 2>&1 ) | grep -o 'RESOLVED name=\[[^]]*\]' || true
 }
 
 pass=0; fail=0
