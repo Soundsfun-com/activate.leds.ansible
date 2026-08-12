@@ -7,9 +7,11 @@ runs it **every ~10 min**, because until a pull installs the agent it can't
 appear on the dashboard's Assign tab at all (see Rule 4). Same-day pushes to
 claimed stores go through the dashboard's "Update all agents" button.
 
-This repo is small and boring on purpose, and it has produced three
-production-affecting bugs in a week — every one of them by **doing nothing
-silently**. Read the two rules below before changing anything.
+This repo is small and boring on purpose, and it keeps producing
+production-affecting bugs — every one of them by **doing nothing silently**: a
+pin that never loaded, a schedule that looked ignored, a patch that downloaded
+and stopped, a Pi that vanished until 2am, a page of hard-won explanation
+deleted by a button click. Read the five rules below before changing anything.
 
 ## Rule 1 — vars live under `inventory/`, never the repo root
 
@@ -97,6 +99,45 @@ is still the store cadence. To get such a Pi back on the Assign tab now:
 `systemctl start activate-ansible-pull.service` (or reboot — `OnBootSec`
 survives every drop-in).
 
+## Rule 5 — every file the dashboard writes loses its comments
+
+**`inventory/` is machine-managed. Comments you put in these three files WILL be
+deleted, without warning, the next time anyone clicks a button:**
+
+| file | rewritten by |
+|---|---|
+| `inventory/group_vars/all.yml` | Firmware console → promote to fleet |
+| `inventory/group_vars/canary.yml` | Firmware console → canary a version |
+| `inventory/host_vars/<slug>.yml` | Firmware console → pin / unpin a site |
+
+The mechanism is `js-yaml` in the dashboard's
+`packages/api/src/integrations/ansible-repo/client.ts`: `yaml.load()`, mutate the
+object, `yaml.dump()`. js-yaml has no concept of comments, so they don't survive
+the round-trip. Keys survive; prose does not.
+
+This has already bitten. On 2026-08-12 `56b163c dashboard: canary agent → main`
+(issued from /controllers Edge Devices) added ONE key to `canary.yml` and
+silently erased all 25 lines of comments in it — the staged-rollout workflow and
+the hostname rollout's rationale, both written hours earlier. Restored below and
+under "Pi hostnames", in the one place a button click can't reach.
+
+**So: explanation goes HERE, never in `inventory/`.** Recover erased prose with
+`git show <commit-before>:inventory/group_vars/canary.yml`.
+
+### The canary staged-rollout workflow
+
+This is the process that lived in `canary.yml`'s header until it was erased.
+`canary.yml` applies only to slugs listed in `canary_sites` (today:
+`[warehouse]`), and precedence is
+`all.yml < canary.yml < host_vars/<slug>.yml`.
+
+1. Set a var in `canary.yml` (e.g. `activate_agent_ref: v1.5.0`).
+2. Push. Canary Pis converge on their next pull.
+3. Soak 24h; watch the dashboard for regressions.
+4. Healthy → copy the var into `all.yml` and drop it from `canary.yml`. The whole
+   fleet converges on its next pull.
+5. Broken → revert. Canary returns to `all.yml`'s value on the next pull.
+
 ## How a Pi knows which store it is
 
 It doesn't, by default: every Pi converges as `hosts: localhost`, i.e. Ansible's
@@ -177,6 +218,15 @@ row, and the Firmware console's Edge Devices matrix will show Warehouse's
 from that UI (value `main`, ≤32 chars so a full SHA won't fit — branch/tag
 names and short SHAs do) if you want the two to agree.
 
+**Warehouse's agent ref is now pinned in two places.** `56b163c` (canary a
+version, from the Firmware console) put `activate_agent_ref: main` into
+`canary.yml`, and `host_vars/warehouse.yml` already pinned the same value. Both
+say `main` today so nothing is broken — but `host_vars` **outranks** canary, so
+editing the canary value alone will look like it did nothing on Warehouse. To
+move Warehouse off `main`, change `host_vars/warehouse.yml`. To use canary as a
+real canary again, drop `activate_agent_ref` from `host_vars/warehouse.yml` so
+the canary value is the one that wins.
+
 ## Verifying
 
     tests/test_site_identity.sh          # needs: pip install ansible-core
@@ -185,6 +235,4 @@ names and short SHAs do) if you want the two to agree.
     tests/test_patch_window.sh
     ansible-playbook --syntax-check playbooks/site.yml
 
-CI runs both plus the guards above. `inventory/group_vars/all.yml` is
-**machine-managed** — the dashboard rewrites it and erases comments; put
-explanation here instead.
+CI runs both plus the guards above.
