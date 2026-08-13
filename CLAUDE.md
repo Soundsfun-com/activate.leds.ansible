@@ -1,11 +1,18 @@
 # Activate fleet config — working notes
 
 What version of what runs on each store's Raspberry Pi. A **claimed** Pi runs
-`ansible-pull` against this repo at **02:00 local, once a day** (plus ~5 min
+`ansible-pull` against this repo at **02:00 local, once a day** (plus ~90 s
 after boot). An **unclaimed** Pi — flashed but not yet assigned to a store —
 runs it **every ~10 min**, because until a pull installs the agent it can't
 appear on the dashboard's Assign tab at all (see Rule 4). Same-day pushes to
 claimed stores go through the dashboard's "Update all agents" button.
+
+**"28 stores" in this repo means the rollout target, not today's fleet.**
+Activate operates 28 US stores; only a subset have been cut over to this system,
+plus two non-store rigs (Warehouse, Bench Lab). `inventory/28-stores.yml` is a
+filename that must never change (Rule 2) and contains zero hosts. When you need
+the real list, query the dashboard's `locations` table — don't quote a number
+from any file here.
 
 This repo is small and boring on purpose, and it keeps producing
 production-affecting bugs — every one of them by **doing nothing silently**: a
@@ -31,10 +38,10 @@ default** — an unloaded pin must fail the run, not silently reuse a stale valu
 
 ## Rule 2 — the image bakes systemd triggers, and systemd ORs them
 
-`activate-ansible-pull.timer` ships in the Pi image with `OnBootSec=5min` +
-`OnUnitActiveSec=1h`. A drop-in that sets `OnCalendar` **without** an empty
-`OnUnitActiveSec=` leaves the hourly repeat running, so the new schedule looks
-ignored. Same trap for any baked value.
+`activate-ansible-pull.timer` ships in the Pi image with `OnBootSec=90s` +
+`OnUnitActiveSec=10min` (it was `5min` + `1h` until the Rule 4 rework). A drop-in
+that sets `OnCalendar` **without** an empty `OnUnitActiveSec=` leaves the baked
+repeat running, so the new schedule looks ignored. Same trap for any baked value.
 
 Also: the inventory FILENAME is baked into that unit (`--inventory
 inventory/28-stores.yml`). Renaming it breaks convergence on every Pi until
@@ -137,6 +144,33 @@ This is the process that lived in `canary.yml`'s header until it was erased.
 4. Healthy → copy the var into `all.yml` and drop it from `canary.yml`. The whole
    fleet converges on its next pull.
 5. Broken → revert. Canary returns to `all.yml`'s value on the next pull.
+
+## Rule 6 — one fact, one home; docs quote, they don't restate
+
+A number, version, schedule or path has exactly ONE authoritative home: the file
+that ships it. Docs may quote it. What they may not do is become a second copy
+that nobody updates.
+
+This is the same silent failure as Rules 1–5, in prose. On 2026-08-13 the README
+still said Pis pull "hourly" and that a change reaches the fleet "within ~1h" —
+false since the Rule 4 rework three weeks earlier, and the sentence you'd read at
+2am deciding whether a bad commit had reached the stores. The dead line had been
+copied into `playbooks/site.yml`'s header, `roles/base/defaults/main.yml` and
+`roles/base/tasks/main.yml` as well: four copies, one fact, nothing checking them.
+
+`tests/test_docs_current.sh` (CI) reads the real values out of
+`inventory/group_vars/all.yml` and `roles/base/defaults/main.yml` and fails when
+this file or the README stops matching them, or when either reintroduces the
+"hourly / within 1h" phrasing.
+
+**Its blind spot, stated plainly:** the pi-image's baked timer lives in the
+*dashboard* repo, so this repo's CI cannot see it. The test cross-checks it only
+when `../dashboard` is checked out alongside (a dev machine), and skips in CI.
+Cross-repo facts are held by this rule and by a human — write them once, here,
+and link from the other side.
+
+Corollary for fleet size: don't write a store count anywhere. Query the
+dashboard's `locations` table.
 
 ## How a Pi knows which store it is
 

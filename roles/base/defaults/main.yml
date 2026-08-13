@@ -37,19 +37,21 @@ activate_hostname_pattern: ""
 activate_log_rotate_days: 14
 activate_log_max_size_mb: 50
 
-# ansible-pull cadence — applied as a systemd drop-in override on
-# /etc/systemd/system/activate-ansible-pull.timer (baked into the pi-gen
-# image as "hourly"). Set in group_vars/all.yml; revert there.
+# ── ansible-pull cadence ────────────────────────────────────────────────────
 #
-# REVERT to "hourly" when dev settles. Higher cadence wastes GitHub
-# clone traffic + tightens the blast-radius window for a buggy commit.
-# The image's RandomizedDelaySec is preserved across overrides so the
-# fleet still doesn't stampede on the minute.
+# Applied as a systemd drop-in on /etc/systemd/system/activate-ansible-pull.timer.
+# The image's baked schedule (OnBootSec=90s + OnUnitActiveSec=10min) governs only
+# a Pi that has never completed a pull; this drop-in owns it from the first
+# successful pull onward. Both OnCalendar and OnUnitActiveSec must be CLEARED
+# before ours are set — systemd ORs triggers (CLAUDE.md Rule 2).
 #
-# Common values:
-#   hourly       — image default (production)
-#   *:0/15       — every 15 minutes
-#   *:0/5        — every 5 minutes (heavy dev)
+# Two branches, selected on whether the Pi has a site_slug — see
+# ansible_pull_unassigned_oncalendar below and CLAUDE.md Rule 4.
+#
+# DON'T speed the claimed-Pi cadence up for a dev push. It widens the
+# blast-radius window for a bad commit across all 28 stores, unattended, at 2am.
+# Use the Edge Pis page's "Update all agents" button instead.
+#
 # Convergence schedule. 2am in the Pi's own timezone (see site_timezone) —
 # config changes land overnight, not during trading hours. Fleet-wide pushes
 # that can't wait go through the Edge Pis page's "Update all agents" button.

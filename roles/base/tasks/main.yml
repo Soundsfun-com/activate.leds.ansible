@@ -65,12 +65,14 @@
       }
 
 - name: Ensure ansible-pull timer override directory exists
-  # The pi-gen image bakes /etc/systemd/system/activate-ansible-pull.timer
-  # with OnCalendar=hourly. We override via a drop-in so the cadence is
+  # The pi-gen image bakes /etc/systemd/system/activate-ansible-pull.timer with
+  # OnBootSec=90s + OnUnitActiveSec=10min + RandomizedDelaySec=60s — the
+  # "not claimed yet" schedule. We override via a drop-in so the cadence is
   # ansible-managed (revertable by editing `ansible_pull_oncalendar` in
-  # group_vars/all.yml and pushing). The image's RandomizedDelaySec is
-  # preserved across the override — fleet doesn't stampede regardless
-  # of cadence.
+  # group_vars/all.yml and pushing). The drop-in REPLACES the baked
+  # RandomizedDelaySec with `ansible_pull_effective_delay`; it does not inherit
+  # it. OnBootSec is deliberately left alone so an unplugged or freshly-flashed
+  # Pi converges shortly after it comes up instead of waiting for the window.
   ansible.builtin.file:
     path: /etc/systemd/system/activate-ansible-pull.timer.d
     state: directory

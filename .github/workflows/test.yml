@@ -53,6 +53,16 @@ jobs:
         # the OnUnitActiveSec/OnCalendar clearing it replaces.
         run: tests/test_pull_cadence.sh
 
+      - name: Docs still describe the config that ships
+        # The prose drifts the same way the config does — silently. The README
+        # said "hourly" and "converges within ~1h" for three weeks after the
+        # cadence moved to 02:00 local, which is the sentence someone reads when
+        # deciding whether a bad commit has reached the stores yet.
+        # Cross-repo caveat: the pi-image's baked timer lives in the dashboard
+        # repo, so that half only cross-checks on a dev machine with both repos
+        # side by side. Here it SKIPS — see the one-home rule in CLAUDE.md.
+        run: tests/test_docs_current.sh
+
       - name: Inventory vars live next to the inventory
         # The failure that started all this: group_vars at the repo root, where
         # Ansible never looks. Cheap to assert, impossible to notice by hand.

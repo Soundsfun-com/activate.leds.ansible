@@ -1,5 +1,6 @@
 ---
-# The ansible-pull target. Runs hourly on every Pi.
+# The ansible-pull target. Runs at 02:00 local on a claimed Pi, every ~10 min
+# on one that is still unclaimed — see roles/base and CLAUDE.md Rule 4.
 #
 # Scope: base + udev-rules + security + activate-agent + cloudflared —
 # full convergence (OS config, agent code ref, tunnel client version).
