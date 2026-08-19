@@ -251,26 +251,36 @@ Two things ARE environment- or host-aware, and they're the tools to use instead:
 
 Full picture: the dashboard repo's `docs/environments.md`.
 
-## Fleet default is pinned, Warehouse tracks main
+## What the fleet runs: read `all.yml`, don't trust this heading
 
-Until 2026-07-28, `all.yml` pinned `activate_agent_ref: main` — meaning every
-merge to the agent repo's main branch was already a fleet-wide deploy to all
-28 stores within the hour, whether or not anyone meant to ship it yet.
+`activate_agent_ref` in `inventory/group_vars/all.yml` decides which agent ref
+every un-pinned site runs. **Go and read the file** — it is machine-managed (the
+dashboard's Firmware console writes it) and any value quoted here goes stale the
+next time someone clicks promote. It has already flipped twice:
 
-`all.yml` now pins an explicit SHA (today's value is just main's HEAD at the
-moment of the cutover — a freeze, not a deliberate version choice; nothing
-changed for the other 27 stores. Future bumps here ARE deliberate promotions).
-`host_vars/warehouse.yml` pins `activate_agent_ref: main`, which
-outranks the fleet default per the precedence above. Net effect: pushing to the
-agent repo's main now reaches Warehouse (the real-hardware test rig) within the
-hour, and reaches everywhere else only when someone edits `all.yml`'s pin —
-by hand, or via the dashboard's Firmware console "promote to fleet" action.
+- until 2026-07-28 it was `main`, so every merge to the agent repo was already a
+  fleet-wide deploy whether or not anyone meant to ship
+- on 2026-07-28 it was frozen to an explicit SHA, so agent development landed on
+  Warehouse alone
+- on 2026-08-13 the Firmware console promoted it back to `main` (commit
+  `01fe0c4`, "promote agent → main fleet-wide")
 
-Testing an agent change: push to the agent repo's main, wait for Warehouse's
-next `ansible-pull`, confirm on the Pi at
-`/var/lib/activate-wled/agent-checkout.json` (or the dashboard's
-`/api/trpc/locations.getAgentSystem?input={"json":{"slug":"warehouse"}}`).
-Promoting to the fleet: bump the SHA in `all.yml`.
+So as of that promotion: **merging to the agent repo's `main` is a fleet-wide
+deploy again**, landing at 02:00 local. That is a deliberate state, not a
+mistake, but it means `main` is no longer a place to try something out. Use the
+agent repo's `dev` branch plus a per-site pin for that:
+
+    # inventory/host_vars/<slug>.yml
+    activate_agent_ref: dev
+
+which outranks the fleet default per the precedence above. Confirm it landed on
+the Pi at `/var/lib/activate-wled/agent-checkout.json`, or via the dashboard's
+`/api/trpc/locations.getAgentSystem?input={"json":{"slug":"warehouse"}}` — the
+pin is written and read on two sides and has never been confirmed on hardware
+(Warehouse is pinned and still reports an old agent version).
+
+Promoting a tested ref to the fleet: bump `all.yml`, by hand or from the
+Firmware console.
 
 Warehouse's pin was set by committing `host_vars/warehouse.yml` directly, not
 via the dashboard's `pinSite` — so there's no matching `location_version_pins`
