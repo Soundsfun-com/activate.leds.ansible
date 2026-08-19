@@ -224,6 +224,33 @@ Nothing else in the fleet reads the system hostname: Pi registration keys on
 the hardware serial, and Cloudflare tunnel/DNS names come from the location
 slug in the DB. Renaming is safe; the only risk is the rename itself failing.
 
+## This repo is NOT split by environment — read this before "staging" anything here
+
+As of 2026-08-19 the dashboard has two environments: production
+(lighting.soundsfun.com, from its `main` branch) and dev
+(lighting-dev.soundsfun.com, from its `dev` branch), with separate databases.
+
+**This repo has no equivalent, and cannot easily get one.** Every Pi runs
+`ansible-pull --url .../activate.leds.ansible.git` with no `--checkout`, and that
+command is BAKED into `activate-ansible-pull.service` inside the Pi image. So
+every Pi — whichever dashboard it reports to — converges against this repo's
+`main`. A change landed here "just for the dev Pi" reaches production stores at
+02:00 that night. Changing it would mean a new Pi image, or an ansible-managed
+systemd drop-in that rewrites the pull command (chicken-and-egg: the first pull
+still comes from `main`).
+
+Two things ARE environment- or host-aware, and they're the tools to use instead:
+
+- **`group_vars/canary.yml`** — the staged-rollout mechanism that already exists.
+  Put a fleet-config change here first; it reaches only `canary_sites`.
+- **`host_vars/<slug>.yml` → `activate_agent_ref`** — which agent code one site
+  runs. Independent of which dashboard that site's Pi reports to: a Pi can run
+  the agent repo's `dev` branch while talking to production, or the frozen fleet
+  SHA while talking to dev. Pi ↔ environment is one file on the Pi itself
+  (`/etc/activate-wled/provision.toml`), never anything in here.
+
+Full picture: the dashboard repo's `docs/environments.md`.
+
 ## Fleet default is pinned, Warehouse tracks main
 
 Until 2026-07-28, `all.yml` pinned `activate_agent_ref: main` — meaning every
