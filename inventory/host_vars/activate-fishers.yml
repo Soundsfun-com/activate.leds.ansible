@@ -1,8 +1,0 @@
-# TEMPORARY pin — Fishers is soaking the frame-loop starvation fix on `dev`
-# (agent df72441) after the 2026-09-08 outage. Remove this file once that lands
-# on main; see "The canary staged-rollout workflow" in ansible/CLAUDE.md.
-#
-# The dashboard's Firmware console can also write this file (pinSite /
-# unpinSite on the "agent" component) — if that happens, this comment won't
-# survive the round-trip. The `activate_agent_ref: dev` value is what matters.
-activate_agent_ref: dev
