@@ -211,14 +211,22 @@ mangle them in the DHCP client list, which is the one screen this naming exists
 to improve. Letters, digits and hyphens is the safe set, and
 `tests/test_hostname.sh` fails the build on anything else.
 
-**Staged on purpose.** The pattern currently lives in `canary.yml` with
-`canary_sites: [warehouse]`, NOT in `all.yml`. Reason: `base` runs 2nd in
-`site.yml`, so if `hostnamectl` rejects a name the play aborts before
-`activate-agent` and `cloudflared` converge — the Pi keeps running but stops
-updating, with no signal. Fleet-wide, unattended, at 2am. Before promoting the
-line into `all.yml`, confirm on Warehouse:
+**Fleet-wide since 2026-09-22.** The pattern lives in `inventory/group_vars/
+all.yml`. It was staged in `canary.yml` (Warehouse only) from 2026-08-12
+because `base` runs 2nd in `site.yml`: if `hostnamectl` rejected a name the
+play would abort before `activate-agent` and `cloudflared` converge — the Pi
+keeps running but stops updating, with no signal. Warehouse ran the rename
+nightly for six weeks while continuing to receive agent updates, which is the
+proof the rename never aborted the play. Every other claimed store gets its
+name at its next 02:00 pull. Revert = set the pattern to `""` in `all.yml`.
 
-    hostnamectl set-hostname ACT-LED-Pi-Warehouse && hostnamectl status
+**The dashboard shows the name the Pi REPORTS, not the name ansible set.**
+`pi_registrations.hostname` used to be written only by `/api/v1/pis/register`,
+which an enrolled Pi never calls again — so the Edge Pis page said
+"ACT-LED-Pi-Unclaimed" for every store, forever, regardless of what the box
+was called. Since agent 2026-09-22 the heartbeat carries `hostname` and the
+dashboard updates the row every beat. A stale name on the Edge Pis page now
+means the Pi is on an older agent, not that the rename failed.
 
 Nothing else in the fleet reads the system hostname: Pi registration keys on
 the hardware serial, and Cloudflare tunnel/DNS names come from the location

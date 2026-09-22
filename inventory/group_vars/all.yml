@@ -2,6 +2,11 @@ inventory_vars_loaded: true
 canary_sites:
   - warehouse
 activate_agent_ref: main
+# Every claimed Pi is named after its store: ACT-LED-Pi-<Store> (title-cased
+# slug, hyphens only — see ansible/CLAUDE.md "Pi hostnames"). Promoted from
+# canary.yml on 2026-09-22 after Warehouse ran it nightly since 2026-08-12
+# without the play ever aborting. Empty string = disable fleet-wide.
+activate_hostname_pattern: ACT-LED-Pi-{{ site_hostname_slug }}
 cloudflared_version: 2026.7.3
 auto_apply_security_patches: true
 maintenance_window_start_hour: 3

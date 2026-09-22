@@ -25,9 +25,9 @@ site_timezone: America/New_York
 # rewording inside that set.
 #
 # EMPTY = disabled: an empty pattern means this role never touches the
-# hostname, which is the pre-rollout state. Turn it on per-site via
-# group_vars/canary.yml first, then promote to group_vars/all.yml once the
-# canary has soaked. See ansible/CLAUDE.md.
+# hostname. The fleet value lives in inventory/group_vars/all.yml (promoted
+# from canary.yml on 2026-09-22); setting it to "" there is the revert path.
+# See ansible/CLAUDE.md.
 #
 # An explicit `desired_hostname` in host_vars/<slug>.yml still wins over the
 # pattern, so one store can be named by hand without disabling this fleet-wide.

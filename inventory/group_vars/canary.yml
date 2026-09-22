@@ -1,2 +1,1 @@
-activate_hostname_pattern: ACT-LED-Pi-{{ site_hostname_slug }}
 activate_agent_ref: main
