@@ -6,32 +6,32 @@
 # Override per-site in host_vars/<slug>.yml when a store is in another zone.
 site_timezone: America/New_York
 
-# Hostname pattern for site Pis. Rendered with the store's `site_slug` (which
-# site-identity reads out of agent.toml — that role runs FIRST in site.yml, so
-# the slug is always resolved by the time this role runs).
+# Hostnames for site Pis (resolved in tasks/resolve-hostname.yml):
 #
-#   ACT-LED-Pi-{{ site_hostname_slug }}  →  ACT-LED-Pi-Alpharetta
+#   claimed   → activate_hostname_pattern    (fleet: "ACT-LED-Pi")
+#   unclaimed → activate_unclaimed_hostname  ("ACT-LED-Pi-Unclaimed")
 #
-# resolve-hostname.yml builds `site_hostname_slug` by title-casing the slug
-# (`american-dream` → `American-Dream`) so the store reads the way people
-# write it.
+# The pattern may still contain `{{ site_hostname_slug }}` (title-cased slug,
+# `american-dream` → `American-Dream`) for a per-store name; the fleet dropped
+# that on 2026-09-28 so webhooks can target one name at every store.
 #
-# ⚠️ HYPHENS ONLY. The requested form was "ACT-LED Pi-[Alpharetta]"; the space
-# and the brackets are NOT legal in a hostname and a space would be rejected
-# outright — see the abort risk in ansible/CLAUDE.md. Letters, digits and
-# hyphens are the safe set: no spaces, no brackets, no underscores (underscores
-# are legal for systemd but some routers mangle them in the DHCP client list,
-# which is the one screen this naming exists to improve). Keep any future
-# rewording inside that set.
+# ⚠️ HYPHENS ONLY. Letters, digits and hyphens are the safe set: no spaces,
+# no brackets, no underscores. `hostnamectl` rejects the first two, which
+# aborts the play in `base` and leaves the Pi running but no longer updating;
+# underscores get mangled by some routers' DHCP client lists.
+# tests/test_hostname.sh fails the build on anything else.
 #
-# EMPTY = disabled: an empty pattern means this role never touches the
-# hostname. The fleet value lives in inventory/group_vars/all.yml (promoted
-# from canary.yml on 2026-09-22); setting it to "" there is the revert path.
-# See ansible/CLAUDE.md.
+# EMPTY PATTERN = disabled: this role then renames nothing, claimed or not.
+# That is the revert path. The fleet value lives in
+# inventory/group_vars/all.yml.
 #
-# An explicit `desired_hostname` in host_vars/<slug>.yml still wins over the
-# pattern, so one store can be named by hand without disabling this fleet-wide.
+# An explicit `desired_hostname` in host_vars/<slug>.yml still wins.
 activate_hostname_pattern: ""
+
+# Must match the image's baked name (dashboard/infra/pi-image/config →
+# TARGET_HOSTNAME, and .github/workflows/build-pi-image.yml → hostname:), so a
+# freshly-flashed Pi is never renamed on its first pull.
+activate_unclaimed_hostname: ACT-LED-Pi-Unclaimed
 
 # Logrotate policy for /var/log/activate-wled/
 activate_log_rotate_days: 14

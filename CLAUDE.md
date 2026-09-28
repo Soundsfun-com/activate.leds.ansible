@@ -188,45 +188,54 @@ Per-site pins and canary rollout depend entirely on it. Don't reorder it.
 `site_timezone` (which decides when 2am is) defaults to `America/New_York` for
 every Pi — a store outside Eastern needs it set in its `host_vars/<slug>.yml`.
 
-## Pi hostnames: ACT-LED-Pi-<Store>
+## Pi hostnames: ACT-LED-Pi and ACT-LED-Pi-Unclaimed
 
-A freshly-flashed Pi is `ACT-LED-Pi-Unclaimed` (baked by the image — set in TWO
-places that must agree: `dashboard/infra/pi-image/config` → `TARGET_HOSTNAME`
-and `.github/workflows/build-pi-image.yml` → `hostname:`). Once enrollment
-writes a `site_slug`, the `base` role renames it to `ACT-LED-Pi-<Store>` — so a
-Pi still called "Unclaimed" is one nobody has assigned yet, and every other Pi
-is identifiable in its store's router client list and over mDNS
-(`ACT-LED-Pi-Alpharetta.local`).
+Two names, fleet-wide (since 2026-09-28):
 
-Controlled by `activate_hostname_pattern`. The role default is `""`, which
-means **do nothing** — that's both the pre-rollout state and the revert path.
-`resolve-hostname.yml` title-cases the slug (`american-dream` →
-`American-Dream`) so the store reads the way people write it. An explicit
-`desired_hostname` in `host_vars/<slug>.yml` still outranks the pattern.
+| Pi state | Hostname | Set by |
+|---|---|---|
+| claimed (has a `site_slug`) | `ACT-LED-Pi` | `activate_hostname_pattern` in `inventory/group_vars/all.yml` |
+| unclaimed / un-enrolled | `ACT-LED-Pi-Unclaimed` | `activate_unclaimed_hostname` in `roles/base/defaults`; also baked by the image |
+
+**Why one shared name.** A store has exactly one lights Pi, and the store's
+Activate game server (always `192.168.2.2`) sends it webhooks — fire alarm →
+all white, see the agent repo's `docs/local-webhooks.md`. A fixed name is one
+address the Activate developers can use at every location. From 2026-09-22 to
+2026-09-28 the claimed name was `ACT-LED-Pi-<Store>`; it was dropped because
+slugs made it inconsistent (`ACT-LED-Pi-Activate-Town-Square` next to
+`ACT-LED-Pi-Lexington`) and the webhook needed one target anyway.
+
+**Telling Pis apart is NOT the hostname's job.** The dashboard keys every Pi on
+its hardware serial; the Edge Pis page shows serial, MAC and IP, and Identify
+blinks the ACT LED (unclaimed Pis via the register poll, claimed ones via the
+heartbeat). Bench workflow: boot a batch, Identify each row, assign it, label
+the case with the store before boxing.
+
+**One side effect on a shared LAN.** Two claimed Pis on the same network (the
+bench/Warehouse LAN) both answer `ACT-LED-Pi.local`, and avahi suffixes one
+`ACT-LED-Pi-2.local`. Harmless — nothing keys on it — but don't mistake it
+for a fault.
+
+The image-baked unclaimed name lives in TWO places that must agree with
+`activate_unclaimed_hostname`: `dashboard/infra/pi-image/config` →
+`TARGET_HOSTNAME` and `.github/workflows/build-pi-image.yml` → `hostname:`.
+An empty `activate_hostname_pattern` renames nothing at all — that's the revert
+path. An explicit `desired_hostname` in `host_vars/<slug>.yml` still wins.
 
 **Hyphens only — this is a correctness rule, not a style one.** The name was
-requested as `ACT-LED Pi-[Alpharetta]`; the space and brackets are invalid in a
-hostname and `hostnamectl` refuses them. Underscores are legal but some routers
-mangle them in the DHCP client list, which is the one screen this naming exists
-to improve. Letters, digits and hyphens is the safe set, and
-`tests/test_hostname.sh` fails the build on anything else.
-
-**Fleet-wide since 2026-09-22.** The pattern lives in `inventory/group_vars/
-all.yml`. It was staged in `canary.yml` (Warehouse only) from 2026-08-12
-because `base` runs 2nd in `site.yml`: if `hostnamectl` rejected a name the
-play would abort before `activate-agent` and `cloudflared` converge — the Pi
-keeps running but stops updating, with no signal. Warehouse ran the rename
-nightly for six weeks while continuing to receive agent updates, which is the
-proof the rename never aborted the play. Every other claimed store gets its
-name at its next 02:00 pull. Revert = set the pattern to `""` in `all.yml`.
+once requested as `ACT-LED Pi-[Alpharetta]`; the space and brackets are invalid
+in a hostname and `hostnamectl` refuses them. Underscores are legal but some
+routers mangle them in the DHCP client list. `tests/test_hostname.sh` fails the
+build on anything else — in both names. `base` runs 2nd in `site.yml`, so a
+rejected name would abort the play before `activate-agent` and `cloudflared`
+converge; that's why this guard is load-bearing.
 
 **The dashboard shows the name the Pi REPORTS, not the name ansible set.**
 `pi_registrations.hostname` used to be written only by `/api/v1/pis/register`,
-which an enrolled Pi never calls again — so the Edge Pis page said
-"ACT-LED-Pi-Unclaimed" for every store, forever, regardless of what the box
-was called. Since agent 2026-09-22 the heartbeat carries `hostname` and the
-dashboard updates the row every beat. A stale name on the Edge Pis page now
-means the Pi is on an older agent, not that the rename failed.
+which an enrolled Pi never calls again. Since agent 1.0.108 the heartbeat
+carries `hostname` and the dashboard updates the row every beat. A stale name
+on the Edge Pis page means the Pi is on an older agent, not that the rename
+failed.
 
 Nothing else in the fleet reads the system hostname: Pi registration keys on
 the hardware serial, and Cloudflare tunnel/DNS names come from the location

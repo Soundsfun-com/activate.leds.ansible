@@ -124,7 +124,7 @@ ansible-playbook --syntax-check playbooks/site.yml
 
 # The tests CI runs
 tests/test_site_identity.sh    # canary + per-site pins + precedence
-tests/test_hostname.sh         # ACT-LED-Pi-<Store> resolves; rejects illegal chars
+tests/test_hostname.sh         # claimed → ACT-LED-Pi, unclaimed → ACT-LED-Pi-Unclaimed; rejects illegal chars
 tests/test_pull_cadence.sh     # both cadence branches; baked-trigger clearing
 tests/test_patch_window.sh     # security upgrade + reboot times agree
 tests/test_docs_current.sh     # this README + CLAUDE.md still match the shipping config

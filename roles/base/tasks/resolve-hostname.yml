@@ -5,36 +5,54 @@
 # Split out of main.yml on purpose: applying the name needs root and systemd,
 # but deciding it doesn't, so tests/test_hostname.sh can import this file and
 # assert the resolved value on a laptop without renaming the laptop.
+#
+# THE CONVENTION (since 2026-09-28): one name for every claimed Pi, one for
+# every unclaimed one.
+#
+#   claimed   → ACT-LED-Pi            (activate_hostname_pattern)
+#   unclaimed → ACT-LED-Pi-Unclaimed  (activate_unclaimed_hostname)
+#
+# A store has exactly one lights Pi, so a fixed name lets the store's Activate
+# game server send its webhooks to the same address at every location. The
+# Pis are told apart by hardware serial + the Identify blink on the Edge Pis
+# page, never by hostname. Until 2026-09-28 the claimed name was
+# ACT-LED-Pi-<Store>; `site_hostname_slug` below is kept so a per-store pattern
+# still works if anyone ever wants it back.
 
 - name: Build the display form of this store's slug
-  # Slugs are stored lowercase and hyphenated (`american-dream`); the hostname
-  # shows the store the way people write it (`American-Dream`), so this
-  # title-cases each hyphen-separated word. Hyphens stay — they're the only
-  # separator a hostname can safely carry (no spaces, no underscores).
-  #
-  #   alpharetta      → Alpharetta
-  #   american-dream  → American-Dream
+  # `american-dream` → `American-Dream`. Only used if the pattern references
+  # it; the fleet pattern currently doesn't.
   ansible.builtin.set_fact:
     site_hostname_slug: >-
       {{ site_slug | replace('-', ' ') | title | replace(' ', '-') }}
   when: site_slug | default('') | length > 0
 
-- name: Derive the site hostname from the store slug
-  # Every claimed Pi should be findable on its store's network as
-  # ACT-LED-Pi-<Store>. site-identity (which runs before this role)
-  # resolved `site_slug` from agent.toml, so we can build the name here
-  # instead of hand-writing `desired_hostname` into every host_vars file.
-  #
-  # `activate_hostname_pattern` itself contains `{{ site_hostname_slug }}`;
-  # Ansible templates recursively, so assigning it here resolves both levels.
+- name: Name a claimed Pi
+  # site-identity (which runs before this role) resolved `site_slug` from
+  # agent.toml, so a slug here means "this Pi is assigned to a store".
   #
   # Precedence: an explicit `desired_hostname` in host_vars/<slug>.yml wins.
-  # Otherwise render the pattern — but only if BOTH the pattern is enabled
-  # (non-empty) and this Pi is claimed (has a slug). An unclaimed Pi has no
-  # store to be named after, so it keeps the image's name.
+  # An empty pattern disables renaming entirely (role default, revert path).
   ansible.builtin.set_fact:
     desired_hostname: "{{ activate_hostname_pattern }}"
   when:
     - desired_hostname is not defined
     - activate_hostname_pattern | default('') | length > 0
-    - site_hostname_slug | default('') | length > 0
+    - site_slug | default('') | length > 0
+
+- name: Name an unclaimed Pi
+  # No slug = imaged but not assigned, or self-unenrolled after its store was
+  # removed. Without this, a Pi flashed from an older image keeps
+  # `activate-led-controller-pi`, and an un-enrolled one keeps the claimed name
+  # and is indistinguishable from a live store Pi in a router list.
+  #
+  # Gated on the same pattern so an empty pattern still renames NOTHING.
+  # Only site Pis run this playbook — the portable flasher image never runs
+  # ansible-pull, so `activate-flasher` is never touched.
+  ansible.builtin.set_fact:
+    desired_hostname: "{{ activate_unclaimed_hostname }}"
+  when:
+    - desired_hostname is not defined
+    - activate_hostname_pattern | default('') | length > 0
+    - activate_unclaimed_hostname | default('') | length > 0
+    - site_slug | default('') | length == 0

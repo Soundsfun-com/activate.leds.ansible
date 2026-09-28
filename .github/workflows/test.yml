@@ -37,7 +37,7 @@ jobs:
       - name: Security patch window renders correctly
         run: tests/test_patch_window.sh
 
-      - name: Per-store Pi hostname resolves (ACT-LED-Pi-<Store>)
+      - name: Pi hostname resolves (ACT-LED-Pi / ACT-LED-Pi-Unclaimed)
         # Also rejects a pattern containing anything but letters, digits and
         # hyphens. A space or bracket is not a style question: hostnamectl
         # refuses it, which aborts `base` — 2nd in site.yml — before the agent
