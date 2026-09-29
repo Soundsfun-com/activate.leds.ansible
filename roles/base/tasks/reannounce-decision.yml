@@ -1,0 +1,23 @@
+---
+# Decide whether the store router needs to hear this Pi's hostname again.
+# Pure computation (reads one state file, sets one fact) so
+# tests/test_dhcp_reannounce.sh can run it on a laptop.
+#
+# The helper (files/activate-dhcp-reannounce) records the name it last
+# announced. Re-announce when that differs from the name this run leaves the
+# Pi with — which includes "never announced": every Pi that existed before
+# 2026-09-29 has no record, so each re-announces exactly once, on its first
+# pull with this change, and then only after a future rename.
+
+- name: Read the hostname this Pi last announced to its router
+  ansible.builtin.slurp:
+    src: "{{ activate_dhcp_state_file }}"
+  register: dhcp_announced_raw
+  failed_when: false
+
+- name: Compare it with the hostname this run leaves the Pi with
+  ansible.builtin.set_fact:
+    hostname_reannounce_needed: >-
+      {{ (activate_dhcp_reannounce | default(true) | bool)
+         and ((dhcp_announced_raw.content | default('') | b64decode | trim)
+              != (desired_hostname | default(ansible_hostname) | trim)) }}

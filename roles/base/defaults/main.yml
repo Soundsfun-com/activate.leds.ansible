@@ -89,3 +89,11 @@ ansible_pull_randomized_delay: "30min"
 # survives every drop-in).
 ansible_pull_unassigned_oncalendar: "*:0/10"
 ansible_pull_unassigned_randomized_delay: "1min"
+
+# After a rename (and once on every Pi that has never announced), reconnect
+# the network so the store router learns the current hostname — the webhook
+# target ACT-LED-Pi doesn't resolve otherwise. The name last announced lives
+# in activate_dhcp_state_file. Set false in host_vars/<slug>.yml to stop one
+# store reconnecting at 02:00, or in all.yml to stop it everywhere.
+activate_dhcp_reannounce: true
+activate_dhcp_state_file: /var/lib/activate-wled/dhcp-announced-hostname

@@ -222,6 +222,20 @@ The image-baked unclaimed name lives in TWO places that must agree with
 An empty `activate_hostname_pattern` renames nothing at all — that's the revert
 path. An explicit `desired_hostname` in `host_vars/<slug>.yml` still wins.
 
+**Renaming the Pi does not rename it on the store's network.** The router
+learns a name only from a DHCP request, and NetworkManager sends one on
+(re)connect, not on rename. Town Square proved it on 2026-09-29: the Pi
+reported `ACT-LED-Pi`, the router still answered `ACT-LED-Pi-Unclaimed` from a
+lease taken twelve days earlier, so webhooks to `ACT-LED-Pi` resolved nowhere.
+So `base` re-announces: `files/activate-dhcp-reannounce` reconnects the network
+once per new name, detached ~60 s after the pull, recording the name first so
+it can never loop, and rebooting only if the network doesn't come back within
+90 s. Every Pi without a record re-announced once on its first pull after this
+landed. `tests/test_dhcp_reannounce.sh` guards both silent failures — never
+firing, and firing every night. Kill switch: `activate_dhcp_reannounce: false`.
+To check a store, ask ITS router, not your Mac's cache:
+`dig @<store DNS from scutil --dns> ACT-LED-Pi`.
+
 **Hyphens only — this is a correctness rule, not a style one.** The name was
 once requested as `ACT-LED Pi-[Alpharetta]`; the space and brackets are invalid
 in a hostname and `hostnamectl` refuses them. Underscores are legal but some

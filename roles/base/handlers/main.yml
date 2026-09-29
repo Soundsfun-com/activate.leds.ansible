@@ -15,3 +15,17 @@
     name: activate-ansible-pull.timer
     daemon_reload: true
     state: restarted
+
+- name: reannounce-hostname-to-router
+  # Detached and delayed on purpose: handlers run at the END of the play, but
+  # the pull still writes its status afterwards, and a reconnect in the middle
+  # of anything network-bound would fail it. systemd-run puts the helper in its
+  # own transient unit, so it outlives the ansible-pull service and runs ~60s
+  # later. Any earlier queued run is cleared first — systemd-run refuses to
+  # reuse a unit name that still exists.
+  ansible.builtin.shell: |
+    systemctl stop activate-dhcp-reannounce.timer activate-dhcp-reannounce.service 2>/dev/null || true
+    systemctl reset-failed activate-dhcp-reannounce.timer activate-dhcp-reannounce.service 2>/dev/null || true
+    systemd-run --unit=activate-dhcp-reannounce --collect \
+      --on-active=60 --timer-property=AccuracySec=1s \
+      /usr/local/sbin/activate-dhcp-reannounce

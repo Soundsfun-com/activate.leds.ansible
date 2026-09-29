@@ -44,6 +44,13 @@ jobs:
         # and cloudflared converge, leaving a Pi that runs but stops updating.
         run: tests/test_hostname.sh
 
+      - name: Hostname re-announce — once per new name, never every night
+        # The store router only learns a name from a DHCP request, so a rename
+        # has to be followed by one reconnect. Guards both silent failures:
+        # never firing (webhooks to ACT-LED-Pi resolve nowhere) and firing
+        # every pull (every store's network drops nightly for nothing).
+        run: tests/test_dhcp_reannounce.sh
+
       - name: Pull cadence — unclaimed Pis converge fast, stores stay at 2am
         # Replaces an inline grep of roles/base/tasks/main.yml. That grep proved
         # the baked OnUnitActiveSec=1h gets retired (systemd ORs triggers), but

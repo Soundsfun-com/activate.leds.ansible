@@ -1,0 +1,62 @@
+#!/usr/bin/env bash
+# Managed by Ansible (roles/base). Do not edit on the Pi.
+#
+# Tell the store router this Pi's CURRENT hostname.
+#
+# A router learns a device's name only from a DHCP request. NetworkManager
+# sends the hostname when it (re)activates a connection, NOT when the hostname
+# changes — so after ansible renames the Pi, the router keeps the old name
+# until the next reboot or reconnect. Seen at Town Square on 2026-09-29: the
+# Pi reported ACT-LED-Pi, the router still answered ACT-LED-Pi-Unclaimed from
+# the lease taken on 2026-09-17.
+#
+# Started by the base role's `reannounce-hostname-to-router` handler through
+# systemd-run, ~60 s after the pull finishes, so it never cuts the network
+# under a running play. Re-activates the default-route connection, which makes
+# NetworkManager send a fresh DHCP request carrying the new name.
+#
+# Safety, in order:
+#   - no nmcli / no default route / device not managed by NetworkManager
+#       → log, change nothing, record nothing (the next pull tries again)
+#   - the announced name is recorded BEFORE the bounce, so whatever happens
+#     next this never repeats for the same name (no reconnect or reboot loop)
+#   - network not back within 90 s → reboot; a boot also does a fresh DHCP
+#     request, which is the goal, and brings the network back up cleanly
+set -u
+
+STATE="${ACTIVATE_DHCP_STATE_FILE:-/var/lib/activate-wled/dhcp-announced-hostname}"
+
+log() { logger -t activate-dhcp-reannounce -- "$*" 2>/dev/null; echo "$*"; }
+
+name="$(hostnamectl --static 2>/dev/null || hostname)"
+
+if ! command -v nmcli >/dev/null 2>&1; then
+  log "nmcli not found — network isn't run by NetworkManager; nothing to do"
+  exit 0
+fi
+
+dev="$(ip -o route show default 2>/dev/null \
+  | awk '{for (i = 1; i < NF; i++) if ($i == "dev") { print $(i + 1); exit }}')"
+if [ -z "$dev" ]; then
+  log "no default route right now; skipping (the next pull will try again)"
+  exit 0
+fi
+
+conn="$(nmcli -g GENERAL.CONNECTION device show "$dev" 2>/dev/null)"
+if [ -z "$conn" ] || [ "$conn" = "--" ]; then
+  log "device $dev isn't managed by NetworkManager; skipping"
+  exit 0
+fi
+
+log "re-announcing hostname '$name' to the router on $dev (connection '$conn')"
+printf '%s\n' "$name" > "$STATE"
+
+if nmcli connection up "$conn" >/dev/null 2>&1 \
+  && nm-online -q -t 90 \
+  && [ -n "$(ip -o route show default 2>/dev/null)" ]; then
+  log "network back on $dev; the router now has '$name'"
+  exit 0
+fi
+
+log "network did not come back within 90 s after re-announcing — rebooting so the Pi rejoins cleanly"
+systemctl reboot

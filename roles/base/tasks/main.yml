@@ -45,6 +45,34 @@
     group: activate-wled
     mode: "0755"
 
+# --- Tell the store router the current hostname ----------------------------
+# Renaming the Pi doesn't reach the router: it learns names only from a DHCP
+# request, and NetworkManager sends one on (re)connect, not on rename. So the
+# store's DNS kept answering the OLD name and the Activate server's webhooks
+# to ACT-LED-Pi had nowhere to go (Town Square, 2026-09-29). The helper
+# reconnects once per new name, detached and delayed; see its header for the
+# safety rules. Kill switch: activate_dhcp_reannounce: false.
+
+- name: Install the hostname re-announce helper
+  ansible.builtin.copy:
+    src: activate-dhcp-reannounce
+    dest: /usr/local/sbin/activate-dhcp-reannounce
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Decide whether the router needs to hear the hostname again
+  ansible.builtin.import_tasks: reannounce-decision.yml
+
+- name: Queue a re-announce to the store router
+  ansible.builtin.debug:
+    msg: >-
+      router will be told '{{ desired_hostname | default(ansible_hostname) }}'
+      about 60s after this run finishes
+  changed_when: true
+  when: hostname_reannounce_needed | bool
+  notify: reannounce-hostname-to-router
+
 - name: Install logrotate policy for /var/log/activate-wled/
   ansible.builtin.copy:
     dest: /etc/logrotate.d/activate-wled
