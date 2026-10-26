@@ -3,7 +3,7 @@ canary_sites:
   - warehouse
 activate_agent_ref: main
 activate_hostname_pattern: ACT-LED-Pi
-cloudflared_version: 2026.9.3
+cloudflared_version: 2026.10.4
 auto_apply_security_patches: true
 maintenance_window_start_hour: 3
 maintenance_window_end_hour: 5
