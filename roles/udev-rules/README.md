@@ -23,4 +23,4 @@ Ansible is idempotent: if the file on disk matches the file in the role, nothing
 When we add a new WLED hardware variant with a different USB serial chip:
 1. Edit `files/99-activate-wled.rules` in this repo. Commit, push.
 2. Edit `infra/pi-image/stage3-activate/04-udev-rules/files/99-activate-wled.rules` in the dashboard repo too. Commit, push.
-3. Existing Pis pick up the change within ~1h via `ansible-pull`. Future-flashed Pis get it from the image.
+3. Existing Pis pick up the change on their next `ansible-pull` — 02:00 local for a claimed store (up to ~24 h), or now via the dashboard's Update agent button. Future-flashed Pis get it from the image.

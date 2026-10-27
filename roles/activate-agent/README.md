@@ -1,6 +1,6 @@
 # role: activate-agent
 
-Clones the Python edge agent into `/opt/activate-wled-agent/agent/` at the ref pinned in `group_vars/all.yml`, installs Python deps into the pre-baked venv, writes the systemd unit, restarts on change.
+Clones the Python edge agent into `/opt/activate-wled-agent/agent/` at the ref pinned in `inventory/group_vars/all.yml` (or a canary / per-store override), installs Python deps into the pre-baked venv, writes the systemd unit, restarts on change.
 
 Source: **private** [`Soundsfun-com/activate.leds.agent`](https://github.com/Soundsfun-com/activate.leds.agent) repo, cloned via SSH using a read-only deploy key baked into the pi-gen image at `/etc/ansible/agent-deploy-key`.
 
@@ -20,7 +20,7 @@ Source: **private** [`Soundsfun-com/activate.leds.agent`](https://github.com/Sou
 | Var | Default | Notes |
 |---|---|---|
 | `activate_agent_repo` | `git@github.com:Soundsfun-com/activate.leds.agent.git` | SSH URL — deploy key required |
-| `activate_agent_ref` | `main` (set in `group_vars/all.yml`) | Tag, branch, or sha. Bulk-update flow edits this. |
+| `activate_agent_ref` | `main` (fleet value in `inventory/group_vars/all.yml`; per-store in `inventory/host_vars/<slug>.yml`) | Tag, branch, or sha. Bulk-update flow edits this. |
 | `activate_agent_dir` | `/opt/activate-wled-agent` | Parent directory |
 | `activate_agent_checkout` | `{{ activate_agent_dir }}/agent` | Where the git checkout lives |
 | `activate_agent_venv` | `{{ activate_agent_dir }}/venv` | Pre-built by stage 02 of the pi-gen image |
@@ -48,7 +48,7 @@ gh secret set AGENT_DEPLOY_KEY --repo Soundsfun-com/activate.leds.dashboard --bo
 
 ## Drift behavior
 
-Because the role re-runs hourly via `ansible-pull`:
+Because the role re-runs on every `ansible-pull` (02:00 local on a claimed Pi, every ~10 min on an unclaimed one):
 - If a field tech edits `/opt/activate-wled-agent/agent/` manually, the next pull `git reset --hard`s it back (`force: yes`).
 - If the systemd unit file diverges (someone runs `systemctl edit`), the next pull rewrites it from the checked-out copy. Drop-ins under `/etc/systemd/system/activate-wled-agent.service.d/` are NOT managed by this role and survive.
 - If the venv falls out of sync (pip install something by hand), the venv is unaffected until the agent repo's `requirements.txt` changes — at which point pip re-installs from a clean state.

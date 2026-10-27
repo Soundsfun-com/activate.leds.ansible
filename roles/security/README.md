@@ -16,7 +16,9 @@ Installs `unattended-upgrades` package + renders two policies:
 - `/etc/apt/apt.conf.d/50unattended-upgrades` — restricts to `*-security` origins, autoreboot only inside the maintenance window
 - `/etc/apt/apt.conf.d/20auto-upgrades` — apt-periodic settings (daily check, auto-download)
 
-**Gated by `auto_apply_security_patches` (default `false`).** When false: patches are downloaded but NOT applied. Flip to `true` in `group_vars/all.yml` (or in `group_vars/canary.yml` first for a staged rollout) when ready to enable auto-patching.
+**Gated by `auto_apply_security_patches`.** The role default is `false` (a safe fallback for a host that somehow loads no vars): patches download but are NOT applied. The fleet sets it to `true` in `inventory/group_vars/all.yml` (since 2026-07-27). When true, two clocks move into the maintenance window (`maintenance_window_start_hour` → `maintenance_window_end_hour`): a drop-in pins `apt-daily-upgrade.timer` to the window start, and `Automatic-Reboot-Time` is the window END so a kernel patch reboots the same night. `tests/test_patch_window.sh` asserts both — see `CLAUDE.md` Rule 3.
+
+`apt_upgrade_blacklist` (default empty) lists package-name regexes that are never auto-upgraded. Anything listed stops getting security fixes, so give each entry a reason and a review date.
 
 ### 3. fail2ban (SSH brute-force protection)
 Installs + enables `fail2ban` with conservative defaults for the `sshd` jail:
@@ -31,7 +33,8 @@ See `defaults/main.yml`.
 
 | Var | Default | Notes |
 |---|---|---|
-| `auto_apply_security_patches` | `false` | Set to `true` after validating on canary group |
+| `auto_apply_security_patches` | `false` | Fleet sets `true` in `inventory/group_vars/all.yml` |
+| `apt_upgrade_blacklist` | `[]` | Package regexes held back from auto-upgrade |
 | `fail2ban_enabled` | `true` | Set to `false` to uninstall |
 | `ssh_allowed_users` | `[activate-wled]` | List of users permitted to SSH in |
 
